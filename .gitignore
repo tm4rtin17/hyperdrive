@@ -1,0 +1,22 @@
+# .NET
+**/bin/
+**/obj/
+*.user
+.vs/
+
+# Node
+node_modules/
+.next/
+out/
+.npm/
+
+# Env
+.env
+.env.*.local
+!.env.example
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store

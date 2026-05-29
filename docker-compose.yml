@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hyperdrive-db
+    environment:
+      POSTGRES_USER: hyperdrive
+      POSTGRES_PASSWORD: hyperdrive
+      POSTGRES_DB: hyperdrive
+    ports:
+      - "5432:5432"
+    volumes:
+      - hyperdrive_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hyperdrive -d hyperdrive"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    container_name: hyperdrive-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      ConnectionStrings__Postgres: "Host=db;Port=5432;Database=hyperdrive;Username=hyperdrive;Password=hyperdrive"
+      Cors__Origins__0: "http://localhost:3000"
+    ports:
+      - "5080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+    container_name: hyperdrive-web
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  hyperdrive_db:

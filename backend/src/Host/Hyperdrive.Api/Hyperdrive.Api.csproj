@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>Hyperdrive.Api</AssemblyName>
+    <RootNamespace>Hyperdrive.Api</RootNamespace>
+    <UserSecretsId>hyperdrive-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Hyperdrive.SharedInfrastructure\Hyperdrive.SharedInfrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Manufacturing\Hyperdrive.Manufacturing.Api\Hyperdrive.Manufacturing.Api.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+</Project>

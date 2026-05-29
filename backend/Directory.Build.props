@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- CA1711: naming rule too broad — blocks legitimate DDD terms (EventHandler, Attribute) -->
+    <!-- CA1725: override param rename — ct is local convention, not public API surface -->
+    <!-- CA1711: blocks legitimate DDD terms (EventHandler, Attribute) -->
+    <!-- CA1725: override param rename — ct is local convention, not public API -->
+    <!-- CA1305: Serilog logging config is not locale-sensitive -->
+    <NoWarn>CA1711;CA1725;CA1305</NoWarn>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Hyperdrive.SharedKernel</AssemblyName>
+    <RootNamespace>Hyperdrive.SharedKernel</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html, body {
+    @apply bg-ink-950 text-ink-100 antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  ::selection {
+    @apply bg-accent text-ink-950;
+  }
+
+  /* Touchscreen-friendly defaults */
+  button, [role="button"], a {
+    @apply select-none;
+  }
+}
+
+@layer components {
+  .surface {
+    @apply bg-ink-900 border border-ink-700 shadow-panel;
+  }
+
+  .surface-raised {
+    @apply bg-ink-800 border border-ink-600;
+  }
+
+  .hairline {
+    @apply border-ink-700;
+  }
+
+  .mono-num {
+    @apply font-mono tabular-nums;
+  }
+}
