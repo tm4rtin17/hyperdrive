@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Hyperdrive.Engineering.Api</AssemblyName>
+    <RootNamespace>Hyperdrive.Engineering.Api</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hyperdrive.Engineering.Application\Hyperdrive.Engineering.Application.csproj" />
+    <ProjectReference Include="..\Hyperdrive.Engineering.Infrastructure\Hyperdrive.Engineering.Infrastructure.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+</Project>

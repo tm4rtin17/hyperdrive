@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Hyperdrive.Engineering.Infrastructure</AssemblyName>
+    <RootNamespace>Hyperdrive.Engineering.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hyperdrive.Engineering.Application\Hyperdrive.Engineering.Application.csproj" />
+    <ProjectReference Include="..\Hyperdrive.Engineering.Domain\Hyperdrive.Engineering.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Hyperdrive.SharedInfrastructure\Hyperdrive.SharedInfrastructure.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+</Project>

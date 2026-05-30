@@ -1,5 +1,5 @@
-using Hyperdrive.Manufacturing.Api;
-using Hyperdrive.Manufacturing.Infrastructure.Persistence;
+using Hyperdrive.Engineering.Api;
+using Hyperdrive.Engineering.Infrastructure.Persistence;
 using Hyperdrive.SharedInfrastructure;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -26,7 +26,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSharedInfrastructure();
 
 // === Module registration ===
-builder.Services.AddManufacturingModule(cs);
+builder.Services.AddEngineeringModule(cs);
 // Future: builder.Services.AddQualityModule(cs);
 // Future: builder.Services.AddInventoryModule(cs);
 
@@ -43,14 +43,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 
     await using var scope = app.Services.CreateAsyncScope();
-    var db = scope.ServiceProvider.GetRequiredService<ManufacturingDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<EngineeringDbContext>();
     await db.Database.EnsureCreatedAsync();
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "hyperdrive-api" }));
 
 // === Module endpoint mapping ===
-app.MapManufacturingEndpoints();
+app.MapEngineeringEndpoints();
 // Future: app.MapQualityEndpoints();
 
 app.Run();

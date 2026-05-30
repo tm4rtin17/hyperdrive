@@ -8,7 +8,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shared", "Shared", "{B00000
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{B0000000-0000-0000-0000-000000000003}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Manufacturing", "Manufacturing", "{B0000000-0000-0000-0000-000000000004}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Engineering", "Engineering", "{B0000000-0000-0000-0000-000000000004}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Api", "src\Host\Hyperdrive.Api\Hyperdrive.Api.csproj", "{A1000000-0000-0000-0000-000000000001}"
 EndProject
@@ -16,13 +16,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.SharedKernel", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.SharedInfrastructure", "src\Shared\Hyperdrive.SharedInfrastructure\Hyperdrive.SharedInfrastructure.csproj", "{A1000000-0000-0000-0000-000000000003}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Manufacturing.Domain", "src\Modules\Manufacturing\Hyperdrive.Manufacturing.Domain\Hyperdrive.Manufacturing.Domain.csproj", "{A1000000-0000-0000-0000-000000000004}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Engineering.Domain", "src\Modules\Engineering\Hyperdrive.Engineering.Domain\Hyperdrive.Engineering.Domain.csproj", "{A1000000-0000-0000-0000-000000000004}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Manufacturing.Application", "src\Modules\Manufacturing\Hyperdrive.Manufacturing.Application\Hyperdrive.Manufacturing.Application.csproj", "{A1000000-0000-0000-0000-000000000005}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Engineering.Application", "src\Modules\Engineering\Hyperdrive.Engineering.Application\Hyperdrive.Engineering.Application.csproj", "{A1000000-0000-0000-0000-000000000005}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Manufacturing.Infrastructure", "src\Modules\Manufacturing\Hyperdrive.Manufacturing.Infrastructure\Hyperdrive.Manufacturing.Infrastructure.csproj", "{A1000000-0000-0000-0000-000000000006}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Engineering.Infrastructure", "src\Modules\Engineering\Hyperdrive.Engineering.Infrastructure\Hyperdrive.Engineering.Infrastructure.csproj", "{A1000000-0000-0000-0000-000000000006}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Manufacturing.Api", "src\Modules\Manufacturing\Hyperdrive.Manufacturing.Api\Hyperdrive.Manufacturing.Api.csproj", "{A1000000-0000-0000-0000-000000000007}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyperdrive.Engineering.Api", "src\Modules\Engineering\Hyperdrive.Engineering.Api\Hyperdrive.Engineering.Api.csproj", "{A1000000-0000-0000-0000-000000000007}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

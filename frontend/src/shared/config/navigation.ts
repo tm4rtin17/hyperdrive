@@ -23,23 +23,31 @@ export type ModuleDefinition = {
 
 export const NAVIGATION: ModuleDefinition[] = [
   {
-    id: 'manufacturing',
-    label: 'Manufacturing',
-    purpose: 'Engineering definition, planning, and shop-floor execution.',
-    accent: 'amber',
+    id: 'engineering',
+    label: 'Engineering',
+    purpose: 'Product definition: parts, revisions, BOMs, and engineering change.',
+    accent: 'cyan',
     submodules: [
       {
         id: 'parts',
         label: 'Part Portal',
-        href: '/manufacturing/parts',
+        href: '/engineering/parts',
         blurb: 'Define parts, revisions, and engineering attributes.',
       },
       {
         id: 'lifecycle',
         label: 'Lifecycle Management',
-        href: '/manufacturing/lifecycle',
+        href: '/engineering/lifecycle',
         blurb: 'Manage BOMs, revision control, and engineering change.',
       },
+    ],
+  },
+  {
+    id: 'manufacturing',
+    label: 'Manufacturing',
+    purpose: 'Planning and shop-floor execution of released engineering definitions.',
+    accent: 'amber',
+    submodules: [
       {
         id: 'planning',
         label: 'Manufacturing Planning',

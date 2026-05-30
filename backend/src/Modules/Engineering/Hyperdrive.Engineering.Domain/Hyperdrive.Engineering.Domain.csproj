@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Hyperdrive.Engineering.Domain</AssemblyName>
+    <RootNamespace>Hyperdrive.Engineering.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\Hyperdrive.SharedKernel\Hyperdrive.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>
