@@ -6,7 +6,7 @@ export default function PlanningPage() {
       <PageHeader
         eyebrow="Manufacturing"
         title="Manufacturing Planning"
-        description="Author work instructions and release work orders. Op sequences are embedded in each work instruction and snapshotted onto the work order at release."
+        description="Define an engineering master for each part — its embedded op sequence and build instructions — then generate work orders from it."
       />
       <PlanningPlaceholder />
     </div>
@@ -17,8 +17,8 @@ function PlanningPlaceholder() {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {[
-        { label: 'Work Instructions', value: '—', hint: 'Op sequences by part master' },
-        { label: 'Work Orders', value: '—', hint: 'Released to the floor' },
+        { label: 'Engineering Masters', value: '—', hint: 'Per-part build definition with embedded op sequence' },
+        { label: 'Work Orders', value: '—', hint: 'Generated from an engineering master' },
       ].map((m) => (
         <div key={m.label} className="surface rounded-sm p-5">
           <div className="text-[10px] uppercase tracking-widest text-ink-400">{m.label}</div>
@@ -29,7 +29,7 @@ function PlanningPlaceholder() {
       <div className="lg:col-span-2 surface rounded-sm px-6 py-16 text-center">
         <div className="text-sm text-ink-300">Planning module scaffold.</div>
         <div className="mt-1 text-xs text-ink-400">
-          WorkInstruction and WorkOrder aggregates live in
+          EngineeringMaster and WorkOrder aggregates live in
           <span className="font-mono text-ink-300"> Hyperdrive.Manufacturing.Domain/Planning</span>.
         </div>
       </div>
