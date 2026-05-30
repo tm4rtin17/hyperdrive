@@ -19,6 +19,7 @@ internal static class PartEndpoints
         parts.MapPost("/", CreatePart).WithName("CreatePart");
         parts.MapPut("/{id:guid}", UpdatePart).WithName("UpdatePart");
         parts.MapDelete("/{id:guid}", DeletePart).WithName("DeletePart");
+        parts.MapPost("/{id:guid}/restore", RestorePart).WithName("RestorePart");
 
         return group;
     }
@@ -79,6 +80,15 @@ internal static class PartEndpoints
         CancellationToken ct)
     {
         var result = await handler.HandleAsync(new DeletePartCommand(id), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> RestorePart(
+        Guid id,
+        RestorePartHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new RestorePartCommand(id), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 

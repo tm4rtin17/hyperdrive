@@ -4,6 +4,7 @@ import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { partsApi, type Part } from '@/modules/manufacturing/parts/api';
 import { PartDetailForm } from '@/modules/manufacturing/parts/components/PartDetailForm';
 import { DeletePartButton } from '@/modules/manufacturing/parts/components/DeletePartButton';
+import { RestorePartButton } from '@/modules/manufacturing/parts/components/RestorePartButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,10 @@ export default async function PartDetailPage({
     <div className="max-w-5xl mx-auto px-6 py-8">
       <PageHeader
         eyebrow={
-          <Link href="/manufacturing/parts" className="hover:text-accent transition-colors">
+          <Link
+            href={part.isArchived ? '/manufacturing/parts?archived=1' : '/manufacturing/parts'}
+            className="hover:text-accent transition-colors"
+          >
             ← Part Portal
           </Link>
         }
@@ -33,8 +37,15 @@ export default async function PartDetailPage({
         description={part.name}
         actions={
           <div className="flex items-center gap-2">
+            {part.isArchived && (
+              <span className="inline-flex items-center px-2 h-6 text-[10px] uppercase tracking-widest border rounded-sm bg-ink-700 text-ink-400 border-ink-600">
+                Archived
+              </span>
+            )}
             <LifecycleBadge value={part.lifecycle} />
-            <DeletePartButton id={part.id} partNumber={part.partNumber} />
+            {part.isArchived
+              ? <RestorePartButton id={part.id} partNumber={part.partNumber} />
+              : <DeletePartButton id={part.id} partNumber={part.partNumber} />}
           </div>
         }
       />

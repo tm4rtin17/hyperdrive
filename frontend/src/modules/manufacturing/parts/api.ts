@@ -100,4 +100,7 @@ export const partsApi = {
 
   remove: (id: string) =>
     api<void>(`/api/manufacturing/parts/${id}`, { method: 'DELETE' }),
+
+  restore: (id: string) =>
+    api<void>(`/api/manufacturing/parts/${id}/restore`, { method: 'POST' }),
 };

@@ -20,6 +20,7 @@ public static class ManufacturingModule
         services.AddScoped<CreatePartHandler>();
         services.AddScoped<UpdatePartHandler>();
         services.AddScoped<DeletePartHandler>();
+        services.AddScoped<RestorePartHandler>();
 
         services.AddScoped<ReleaseRevisionHandler>();
         services.AddScoped<ObsoleteRevisionHandler>();

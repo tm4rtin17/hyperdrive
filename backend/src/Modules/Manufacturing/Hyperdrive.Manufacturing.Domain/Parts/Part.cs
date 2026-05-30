@@ -90,6 +90,13 @@ public sealed class Part : AggregateRoot<PartId>
         return Result.Success();
     }
 
+    /// <summary>Restore a previously archived part back to the active catalog. Idempotent.</summary>
+    public Result Restore()
+    {
+        IsArchived = false;
+        return Result.Success();
+    }
+
     // === Revision control ===
 
     public Result ReleaseRevision(PartRevisionId revisionId, DateTimeOffset now)
