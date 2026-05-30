@@ -44,6 +44,7 @@ export type PartSummary = {
   revision: string;
   lifecycle: string;
   createdAt: string;
+  isArchived: boolean;
   partType: PartType;
   traceabilityType: TraceabilityType;
 };
@@ -55,6 +56,7 @@ export type Part = {
   revision: string;
   lifecycle: string;
   createdAt: string;
+  isArchived: boolean;
   partType: PartType;
   unitOfMeasure: UnitOfMeasure;
   sourcing: SourcingType;
@@ -77,10 +79,10 @@ export type UpdatePartInput = {
 };
 
 export const partsApi = {
-  list: (opts?: { search?: string; includeObsolete?: boolean }) => {
+  list: (opts?: { search?: string; includeArchived?: boolean }) => {
     const params = new URLSearchParams();
     if (opts?.search) params.set('search', opts.search);
-    if (opts?.includeObsolete) params.set('includeObsolete', 'true');
+    if (opts?.includeArchived) params.set('includeArchived', 'true');
     const qs = params.toString();
     return api<PartSummary[]>(`/api/manufacturing/parts${qs ? `?${qs}` : ''}`);
   },

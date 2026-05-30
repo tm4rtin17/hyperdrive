@@ -6,11 +6,14 @@ namespace Hyperdrive.Manufacturing.Domain.Parts;
 
 public sealed class Part : AggregateRoot<PartId>
 {
+    private readonly List<PartRevision> _revisions = new();
+
     public PartNumber PartNumber { get; private set; } = default!;
     public string Name { get; private set; } = default!;
-    public Revision Revision { get; private set; } = default!;
-    public PartLifecycle Lifecycle { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>Soft-delete flag: archived parts are hidden from the default catalog.</summary>
+    public bool IsArchived { get; private set; }
 
     // Part-master attributes (hardcoded, strongly typed).
     public PartType PartType { get; private set; }
@@ -20,16 +23,19 @@ public sealed class Part : AggregateRoot<PartId>
     public string? Material { get; private set; }
     public decimal? MassGrams { get; private set; }
 
+    public IReadOnlyCollection<PartRevision> Revisions => _revisions;
+
+    /// <summary>The working/latest revision (highest ordinal).</summary>
+    public PartRevision CurrentRevision => _revisions.MaxBy(r => r.Ordinal)!;
+
     // EF
     private Part() { }
 
-    private Part(PartId id, PartNumber number, string name, Revision revision, DateTimeOffset createdAt)
+    private Part(PartId id, PartNumber number, string name, DateTimeOffset createdAt)
         : base(id)
     {
         PartNumber = number;
         Name = name;
-        Revision = revision;
-        Lifecycle = PartLifecycle.InDevelopment;
         CreatedAt = createdAt;
 
         // Sensible defaults so creation is just Part Number + Name.
@@ -37,6 +43,9 @@ public sealed class Part : AggregateRoot<PartId>
         UnitOfMeasure = UnitOfMeasure.Each;
         Sourcing = SourcingType.Make;
         Traceability = Traceability.None();
+
+        // Every part starts at the initial revision "-", In Work.
+        _revisions.Add(new PartRevision(Revision.Initial, ordinal: 0, createdAt));
     }
 
     public static Result<Part> Create(PartNumber number, string name, DateTimeOffset now)
@@ -46,8 +55,8 @@ public sealed class Part : AggregateRoot<PartId>
         if (name.Length > 200)
             return DomainError.Validation("part.name.too_long", "Part name must be ≤ 200 chars.");
 
-        var part = new Part(PartId.New(), number, name.Trim(), Revision.Initial, now);
-        part.Raise(new PartCreatedEvent(part.Id, number.Value, part.Revision.Value));
+        var part = new Part(PartId.New(), number, name.Trim(), now);
+        part.Raise(new PartCreatedEvent(part.Id, number.Value, part.CurrentRevision.Rev.Value));
         return part;
     }
 
@@ -74,23 +83,82 @@ public sealed class Part : AggregateRoot<PartId>
         return Result.Success();
     }
 
-    public Result Release()
+    /// <summary>Soft-delete: hide the part from the default catalog (recoverable). Idempotent.</summary>
+    public Result Archive()
     {
-        if (Lifecycle == PartLifecycle.Released) return Result.Success();
-        if (Lifecycle == PartLifecycle.Obsolete)
-            return DomainError.Conflict("part.release.obsolete", "Cannot release an obsolete part.");
-        Lifecycle = PartLifecycle.Released;
+        IsArchived = true;
         return Result.Success();
     }
 
-    /// <summary>
-    /// Soft-delete: transitions the part to the Obsolete lifecycle so it is hidden
-    /// from the default catalog while remaining recoverable and preserving history.
-    /// Idempotent.
-    /// </summary>
-    public Result MarkObsolete()
+    // === Revision control ===
+
+    public Result ReleaseRevision(PartRevisionId revisionId, DateTimeOffset now)
     {
-        Lifecycle = PartLifecycle.Obsolete;
-        return Result.Success();
+        var rev = FindRevision(revisionId);
+        return rev is null
+            ? DomainError.NotFound("revision.not_found", $"Revision {revisionId} not found.")
+            : rev.Release(now);
     }
+
+    public Result ObsoleteRevision(PartRevisionId revisionId)
+    {
+        var rev = FindRevision(revisionId);
+        return rev is null
+            ? DomainError.NotFound("revision.not_found", $"Revision {revisionId} not found.")
+            : rev.Obsolete();
+    }
+
+    /// <summary>
+    /// Rolls a new revision from the current one (which must be Released), seeding its BOM
+    /// from the prior revision. Returns the new revision.
+    /// </summary>
+    public Result<PartRevision> CreateNextRevision(DateTimeOffset now)
+    {
+        var current = CurrentRevision;
+        if (current.Lifecycle != RevisionLifecycle.Released)
+            return DomainError.Conflict(
+                "revision.roll.not_released",
+                $"Revision {current.Rev} must be Released before rolling a new revision.");
+
+        var nextRev = current.Rev.Next();
+        if (nextRev.IsFailure) return nextRev.Error;
+
+        var revision = new PartRevision(nextRev.Value!, current.Ordinal + 1, now);
+        revision.CopyLinesFrom(current);
+        _revisions.Add(revision);
+        return revision;
+    }
+
+    // === BOM editing (delegates to the target revision) ===
+
+    public Result AddBomLine(
+        PartRevisionId revisionId, PartId childPartId, decimal quantity, int? findNumber, string? referenceDesignator)
+    {
+        if (childPartId == Id)
+            return DomainError.Validation("bom.self_reference", "A part cannot contain itself.");
+
+        var rev = FindRevision(revisionId);
+        return rev is null
+            ? DomainError.NotFound("revision.not_found", $"Revision {revisionId} not found.")
+            : rev.AddLine(childPartId, quantity, findNumber, referenceDesignator);
+    }
+
+    public Result UpdateBomLine(
+        PartRevisionId revisionId, BomLineId lineId, decimal quantity, int? findNumber, string? referenceDesignator)
+    {
+        var rev = FindRevision(revisionId);
+        return rev is null
+            ? DomainError.NotFound("revision.not_found", $"Revision {revisionId} not found.")
+            : rev.UpdateLine(lineId, quantity, findNumber, referenceDesignator);
+    }
+
+    public Result RemoveBomLine(PartRevisionId revisionId, BomLineId lineId)
+    {
+        var rev = FindRevision(revisionId);
+        return rev is null
+            ? DomainError.NotFound("revision.not_found", $"Revision {revisionId} not found.")
+            : rev.RemoveLine(lineId);
+    }
+
+    private PartRevision? FindRevision(PartRevisionId id) => _revisions.FirstOrDefault(r => r.Id == id);
 }

@@ -25,19 +25,9 @@ internal sealed class PartConfiguration : IEntityTypeConfiguration<Part>
 
         builder.Property(p => p.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
 
-        builder.Property(p => p.Revision)
-            .HasConversion(r => r.Value, v => Revision.Create(v).Value!)
-            .HasColumnName("revision")
-            .HasMaxLength(2)
-            .IsRequired();
-
-        builder.Property(p => p.Lifecycle)
-            .HasConversion<string>()
-            .HasColumnName("lifecycle")
-            .HasMaxLength(32)
-            .IsRequired();
-
         builder.Property(p => p.CreatedAt).HasColumnName("created_at").IsRequired();
+
+        builder.Property(p => p.IsArchived).HasColumnName("is_archived").IsRequired();
 
         // Part-master attributes (typed).
         builder.Property(p => p.PartType)
@@ -76,6 +66,16 @@ internal sealed class PartConfiguration : IEntityTypeConfiguration<Part>
         });
         builder.Navigation(p => p.Traceability).IsRequired();
 
+        // Revisions are part of the Part aggregate (backing-field collection).
+        builder.HasMany(p => p.Revisions)
+            .WithOne()
+            .HasForeignKey("part_id")
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(p => p.Revisions)
+            .HasField("_revisions")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.Ignore(p => p.DomainEvents);
+        builder.Ignore(p => p.CurrentRevision);
     }
 }

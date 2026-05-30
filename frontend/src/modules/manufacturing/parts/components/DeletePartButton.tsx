@@ -11,7 +11,7 @@ export function DeletePartButton({ id, partNumber }: { id: string; partNumber: s
   const [error, setError] = useState<string | null>(null);
 
   function onDelete() {
-    if (!window.confirm(`Delete ${partNumber}? It will be marked Obsolete and hidden from the catalog (recoverable).`))
+    if (!window.confirm(`Delete ${partNumber}? It will be archived and hidden from the catalog (recoverable).`))
       return;
     setError(null);
     start(async () => {

@@ -6,12 +6,12 @@ namespace Hyperdrive.Manufacturing.Infrastructure.Persistence.Repositories;
 
 internal sealed class PartReader(ManufacturingDbContext db) : IPartReader
 {
-    public async Task<IReadOnlyList<PartSummaryDto>> ListAsync(string? search, int limit, bool includeObsolete, CancellationToken ct)
+    public async Task<IReadOnlyList<PartSummaryDto>> ListAsync(string? search, int limit, bool includeArchived, CancellationToken ct)
     {
-        var query = db.Parts.AsNoTracking().AsQueryable();
+        var query = db.Parts.AsNoTracking().Include(p => p.Revisions).AsQueryable();
 
-        if (!includeObsolete)
-            query = query.Where(p => p.Lifecycle != PartLifecycle.Obsolete);
+        if (!includeArchived)
+            query = query.Where(p => !p.IsArchived);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -31,7 +31,8 @@ internal sealed class PartReader(ManufacturingDbContext db) : IPartReader
 
     public async Task<PartDto?> GetAsync(Guid id, CancellationToken ct)
     {
-        var part = await db.Parts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == new PartId(id), ct);
+        var part = await db.Parts.AsNoTracking().Include(p => p.Revisions)
+            .FirstOrDefaultAsync(p => p.Id == new PartId(id), ct);
         return part?.ToDto();
     }
 
@@ -41,7 +42,8 @@ internal sealed class PartReader(ManufacturingDbContext db) : IPartReader
         if (numberResult.IsFailure) return null;
         var number = numberResult.Value!;
 
-        var part = await db.Parts.AsNoTracking().FirstOrDefaultAsync(p => p.PartNumber == number, ct);
+        var part = await db.Parts.AsNoTracking().Include(p => p.Revisions)
+            .FirstOrDefaultAsync(p => p.PartNumber == number, ct);
         return part?.ToDto();
     }
 }

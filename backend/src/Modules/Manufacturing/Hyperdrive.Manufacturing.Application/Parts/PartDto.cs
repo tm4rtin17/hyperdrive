@@ -7,6 +7,7 @@ public sealed record PartDto(
     string Revision,
     string Lifecycle,
     DateTimeOffset CreatedAt,
+    bool IsArchived,
     string PartType,
     string UnitOfMeasure,
     string Sourcing,
@@ -23,5 +24,6 @@ public sealed record PartSummaryDto(
     string Revision,
     string Lifecycle,
     DateTimeOffset CreatedAt,
+    bool IsArchived,
     string PartType,
     string TraceabilityType);

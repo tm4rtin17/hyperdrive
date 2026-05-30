@@ -35,6 +35,12 @@ export const NAVIGATION: ModuleDefinition[] = [
         blurb: 'Define parts, revisions, and engineering attributes.',
       },
       {
+        id: 'lifecycle',
+        label: 'Lifecycle Management',
+        href: '/manufacturing/lifecycle',
+        blurb: 'Manage BOMs, revision control, and engineering change.',
+      },
+      {
         id: 'planning',
         label: 'Manufacturing Planning',
         href: '/manufacturing/planning',

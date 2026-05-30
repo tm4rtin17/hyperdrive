@@ -1,4 +1,5 @@
 using Hyperdrive.Manufacturing.Application.Abstractions;
+using Hyperdrive.Manufacturing.Application.Lifecycle;
 using Hyperdrive.Manufacturing.Application.Parts;
 using Hyperdrive.Manufacturing.Domain.Parts;
 using Hyperdrive.Manufacturing.Infrastructure.Persistence;
@@ -21,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ManufacturingDbContext>());
         services.AddScoped<IPartRepository, PartRepository>();
         services.AddScoped<IPartReader, PartReader>();
+        services.AddScoped<ILifecycleReader, LifecycleReader>();
 
         return services;
     }

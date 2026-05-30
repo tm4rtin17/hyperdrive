@@ -9,15 +9,15 @@ export const dynamic = 'force-dynamic';
 export default async function PartsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ obsolete?: string }>;
+  searchParams: Promise<{ archived?: string }>;
 }) {
-  const { obsolete } = await searchParams;
-  const includeObsolete = obsolete === '1';
+  const { archived } = await searchParams;
+  const includeArchived = archived === '1';
 
   let parts: PartSummary[] = [];
   let loadError: string | null = null;
   try {
-    parts = await partsApi.list({ includeObsolete });
+    parts = await partsApi.list({ includeArchived });
   } catch (e) {
     loadError = e instanceof Error ? e.message : 'API unreachable.';
   }
@@ -35,10 +35,10 @@ export default async function PartsPage({
 
         <div className="flex items-center justify-end">
           <Link
-            href={includeObsolete ? '/manufacturing/parts' : '/manufacturing/parts?obsolete=1'}
+            href={includeArchived ? '/manufacturing/parts' : '/manufacturing/parts?archived=1'}
             className="text-xs uppercase tracking-wider text-ink-400 hover:text-accent transition-colors"
           >
-            {includeObsolete ? '✓ Showing obsolete' : 'Show obsolete'}
+            {includeArchived ? '✓ Showing archived' : 'Show archived'}
           </Link>
         </div>
 

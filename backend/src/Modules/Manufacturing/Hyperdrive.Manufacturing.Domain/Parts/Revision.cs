@@ -8,8 +8,9 @@ namespace Hyperdrive.Manufacturing.Domain.Parts;
 /// </summary>
 public sealed record Revision
 {
-    private static readonly HashSet<char> Allowed =
-        new("ABCDEFGHJKLMNPRTUVWY".ToCharArray());
+    private const string Sequence = "ABCDEFGHJKLMNPRTUVWY";
+
+    private static readonly HashSet<char> Allowed = new(Sequence.ToCharArray());
 
     public string Value { get; }
 
@@ -32,6 +33,25 @@ public sealed record Revision
                 "Revision must be '-' or a single allowed letter (skips I, O, Q, S, X, Z).");
 
         return new Revision(v);
+    }
+
+    /// <summary>
+    /// The next revision in sequence: "-" → A → B … (skipping I, O, Q, S, X, Z).
+    /// Returns a validation error once the single-letter sequence past Y is exhausted
+    /// (double-letter revisions are a future enhancement).
+    /// </summary>
+    public Result<Revision> Next()
+    {
+        if (Value == "-")
+            return new Revision(Sequence[0].ToString());
+
+        var idx = Sequence.IndexOf(Value[0]);
+        if (idx < 0 || idx + 1 >= Sequence.Length)
+            return DomainError.Validation(
+                "revision.sequence_exhausted",
+                "Revision sequence exhausted (past Y); double-letter revisions are not yet supported.");
+
+        return new Revision(Sequence[idx + 1].ToString());
     }
 
     public override string ToString() => Value;

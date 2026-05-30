@@ -6,7 +6,7 @@ namespace Hyperdrive.Manufacturing.Application.Parts;
 /// </summary>
 public interface IPartReader
 {
-    Task<IReadOnlyList<PartSummaryDto>> ListAsync(string? search, int limit, bool includeObsolete, CancellationToken ct);
+    Task<IReadOnlyList<PartSummaryDto>> ListAsync(string? search, int limit, bool includeArchived, CancellationToken ct);
     Task<PartDto?> GetAsync(Guid id, CancellationToken ct);
     Task<PartDto?> GetByNumberAsync(string partNumber, CancellationToken ct);
 }

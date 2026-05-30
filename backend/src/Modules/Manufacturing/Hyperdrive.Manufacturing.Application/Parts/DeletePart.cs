@@ -5,8 +5,8 @@ using Hyperdrive.SharedKernel.Results;
 namespace Hyperdrive.Manufacturing.Application.Parts;
 
 /// <summary>
-/// Soft-delete: marks the part Obsolete rather than removing it, preserving
-/// history and traceability while hiding it from the default catalog.
+/// Soft-delete: archives the part rather than removing it, preserving history and
+/// traceability while hiding it from the default catalog.
 /// </summary>
 public sealed record DeletePartCommand(Guid Id);
 
@@ -18,7 +18,7 @@ public sealed class DeletePartHandler(IPartRepository repository, IUnitOfWork uo
         if (part is null)
             return DomainError.NotFound("part.not_found", $"Part {cmd.Id} not found.");
 
-        var result = part.MarkObsolete();
+        var result = part.Archive();
         if (result.IsFailure) return result;
 
         await uow.SaveChangesAsync(ct);

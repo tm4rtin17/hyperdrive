@@ -26,10 +26,10 @@ internal static class PartEndpoints
     private static async Task<Ok<IReadOnlyList<PartSummaryDto>>> ListParts(
         string? search,
         int? limit,
-        bool? includeObsolete,
+        bool? includeArchived,
         IPartReader reader,
         CancellationToken ct) =>
-        TypedResults.Ok(await reader.ListAsync(search, limit ?? 50, includeObsolete ?? false, ct));
+        TypedResults.Ok(await reader.ListAsync(search, limit ?? 50, includeArchived ?? false, ct));
 
     private static async Task<Results<Ok<PartDto>, NotFound>> GetPart(
         Guid id,
