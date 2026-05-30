@@ -19,9 +19,6 @@ export function TopNav() {
 
         <div className="ml-auto flex items-center gap-3">
           <SystemPulse />
-          <div className="text-xs text-ink-400 font-mono tabular-nums hidden md:block">
-            <span className="text-ink-300">ENV</span> dev
-          </div>
         </div>
       </div>
     </header>
@@ -39,12 +36,11 @@ function Logo() {
 
 function SystemPulse() {
   return (
-    <div className="flex items-center gap-2 px-3 h-8 surface rounded-sm">
+    <div className="flex items-center px-3 h-8 surface rounded-sm">
       <span className="relative inline-flex">
         <span className="absolute inset-0 rounded-full bg-signal-ok/40 animate-ping" />
         <span className="relative w-1.5 h-1.5 rounded-full bg-signal-ok" />
       </span>
-      <span className="text-[10px] uppercase tracking-widest text-ink-300">Nominal</span>
     </div>
   );
 }
