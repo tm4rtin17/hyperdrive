@@ -7,7 +7,14 @@ public sealed record PartDto(
     string Revision,
     string Lifecycle,
     DateTimeOffset CreatedAt,
-    IReadOnlyDictionary<string, string> Attributes);
+    string PartType,
+    string UnitOfMeasure,
+    string Sourcing,
+    string? Material,
+    decimal? MassGrams,
+    string TraceabilityType,
+    string? SerialAssignment,
+    string? SerialFormat);
 
 public sealed record PartSummaryDto(
     Guid Id,
@@ -15,4 +22,6 @@ public sealed record PartSummaryDto(
     string Name,
     string Revision,
     string Lifecycle,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string PartType,
+    string TraceabilityType);

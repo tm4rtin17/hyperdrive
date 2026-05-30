@@ -1,13 +1,17 @@
 using Hyperdrive.Manufacturing.Application.Parts;
+using Hyperdrive.Manufacturing.Domain.Parts;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hyperdrive.Manufacturing.Infrastructure.Persistence.Repositories;
 
 internal sealed class PartReader(ManufacturingDbContext db) : IPartReader
 {
-    public async Task<IReadOnlyList<PartSummaryDto>> ListAsync(string? search, int limit, CancellationToken ct)
+    public async Task<IReadOnlyList<PartSummaryDto>> ListAsync(string? search, int limit, bool includeObsolete, CancellationToken ct)
     {
         var query = db.Parts.AsNoTracking().AsQueryable();
+
+        if (!includeObsolete)
+            query = query.Where(p => p.Lifecycle != PartLifecycle.Obsolete);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -17,31 +21,27 @@ internal sealed class PartReader(ManufacturingDbContext db) : IPartReader
                 EF.Functions.ILike(p.Name, $"%{s}%"));
         }
 
-        return await query
+        var parts = await query
             .OrderByDescending(p => p.CreatedAt)
             .Take(Math.Clamp(limit, 1, 200))
-            .Select(p => new PartSummaryDto(
-                p.Id.Value,
-                p.PartNumber.Value,
-                p.Name,
-                p.Revision.Value,
-                p.Lifecycle.ToString(),
-                p.CreatedAt))
             .ToListAsync(ct);
+
+        return parts.Select(p => p.ToSummary()).ToList();
     }
 
     public async Task<PartDto?> GetAsync(Guid id, CancellationToken ct)
     {
-        var part = await db.Parts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == new Hyperdrive.Manufacturing.Domain.Parts.PartId(id), ct);
-        if (part is null) return null;
+        var part = await db.Parts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == new PartId(id), ct);
+        return part?.ToDto();
+    }
 
-        return new PartDto(
-            part.Id.Value,
-            part.PartNumber.Value,
-            part.Name,
-            part.Revision.Value,
-            part.Lifecycle.ToString(),
-            part.CreatedAt,
-            part.Attributes.ToDictionary(a => a.Key, a => a.Value));
+    public async Task<PartDto?> GetByNumberAsync(string partNumber, CancellationToken ct)
+    {
+        var numberResult = PartNumber.Create(partNumber);
+        if (numberResult.IsFailure) return null;
+        var number = numberResult.Value!;
+
+        var part = await db.Parts.AsNoTracking().FirstOrDefaultAsync(p => p.PartNumber == number, ct);
+        return part?.ToDto();
     }
 }

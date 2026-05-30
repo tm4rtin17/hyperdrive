@@ -29,13 +29,6 @@ public sealed class CreatePartHandler(
         await repository.AddAsync(part, ct);
         await uow.SaveChangesAsync(ct);
 
-        return new PartDto(
-            part.Id.Value,
-            part.PartNumber.Value,
-            part.Name,
-            part.Revision.Value,
-            part.Lifecycle.ToString(),
-            part.CreatedAt,
-            part.Attributes.ToDictionary(a => a.Key, a => a.Value));
+        return part.ToDto();
     }
 }

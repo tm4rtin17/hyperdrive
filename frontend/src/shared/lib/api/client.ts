@@ -16,9 +16,15 @@ export class ApiError extends Error {
 
 type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown };
 
+const serverBase =
+  typeof window === 'undefined'
+    ? (process.env.API_INTERNAL_URL ?? 'http://localhost:5080')
+    : '';
+
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { body, headers, ...rest } = opts;
-  const res = await fetch(path.startsWith('/') ? path : `/${path}`, {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  const res = await fetch(`${serverBase}${normalized}`, {
     ...rest,
     headers: {
       'Content-Type': 'application/json',

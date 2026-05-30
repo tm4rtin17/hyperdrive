@@ -16,7 +16,8 @@ public static class ManufacturingModule
         services.AddManufacturingInfrastructure(connectionString);
 
         services.AddScoped<CreatePartHandler>();
-        services.AddScoped<AssignAttributeHandler>();
+        services.AddScoped<UpdatePartHandler>();
+        services.AddScoped<DeletePartHandler>();
 
         return services;
     }

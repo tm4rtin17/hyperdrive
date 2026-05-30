@@ -6,15 +6,19 @@ namespace Hyperdrive.Manufacturing.Domain.Parts;
 
 public sealed class Part : AggregateRoot<PartId>
 {
-    private readonly Dictionary<string, PartAttribute> _attributes = new(StringComparer.OrdinalIgnoreCase);
-
     public PartNumber PartNumber { get; private set; } = default!;
     public string Name { get; private set; } = default!;
     public Revision Revision { get; private set; } = default!;
     public PartLifecycle Lifecycle { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public IReadOnlyCollection<PartAttribute> Attributes => _attributes.Values;
+    // Part-master attributes (hardcoded, strongly typed).
+    public PartType PartType { get; private set; }
+    public UnitOfMeasure UnitOfMeasure { get; private set; }
+    public SourcingType Sourcing { get; private set; }
+    public Traceability Traceability { get; private set; } = Traceability.None();
+    public string? Material { get; private set; }
+    public decimal? MassGrams { get; private set; }
 
     // EF
     private Part() { }
@@ -27,6 +31,12 @@ public sealed class Part : AggregateRoot<PartId>
         Revision = revision;
         Lifecycle = PartLifecycle.InDevelopment;
         CreatedAt = createdAt;
+
+        // Sensible defaults so creation is just Part Number + Name.
+        PartType = PartType.Component;
+        UnitOfMeasure = UnitOfMeasure.Each;
+        Sourcing = SourcingType.Make;
+        Traceability = Traceability.None();
     }
 
     public static Result<Part> Create(PartNumber number, string name, DateTimeOffset now)
@@ -41,18 +51,26 @@ public sealed class Part : AggregateRoot<PartId>
         return part;
     }
 
-    public Result AssignAttribute(string key, string value)
+    /// <summary>Updates the editable part-master attributes.</summary>
+    public Result UpdateDetails(
+        PartType partType,
+        UnitOfMeasure unitOfMeasure,
+        SourcingType sourcing,
+        Traceability traceability,
+        string? material,
+        decimal? massGrams)
     {
-        if (string.IsNullOrWhiteSpace(key))
-            return DomainError.Validation("attribute.key.empty", "Attribute key is required.");
-        if (key.Length > 64)
-            return DomainError.Validation("attribute.key.too_long", "Attribute key must be ≤ 64 chars.");
-        if (value is null)
-            return DomainError.Validation("attribute.value.null", "Attribute value is required.");
+        if (massGrams is < 0)
+            return DomainError.Validation("part.mass.negative", "Mass cannot be negative.");
+        if (material is { Length: > 200 })
+            return DomainError.Validation("part.material.too_long", "Material must be ≤ 200 chars.");
 
-        var k = key.Trim().ToLowerInvariant();
-        _attributes[k] = new PartAttribute(k, value);
-        Raise(new PartAttributeAssignedEvent(Id, k, value));
+        PartType = partType;
+        UnitOfMeasure = unitOfMeasure;
+        Sourcing = sourcing;
+        Traceability = traceability;
+        Material = string.IsNullOrWhiteSpace(material) ? null : material.Trim();
+        MassGrams = massGrams;
         return Result.Success();
     }
 
@@ -62,6 +80,17 @@ public sealed class Part : AggregateRoot<PartId>
         if (Lifecycle == PartLifecycle.Obsolete)
             return DomainError.Conflict("part.release.obsolete", "Cannot release an obsolete part.");
         Lifecycle = PartLifecycle.Released;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Soft-delete: transitions the part to the Obsolete lifecycle so it is hidden
+    /// from the default catalog while remaining recoverable and preserving history.
+    /// Idempotent.
+    /// </summary>
+    public Result MarkObsolete()
+    {
+        Lifecycle = PartLifecycle.Obsolete;
         return Result.Success();
     }
 }

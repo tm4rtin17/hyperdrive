@@ -1,8 +1,11 @@
 'use client';
 
-import type { PartSummary } from '@/modules/manufacturing/parts/api';
+import { useRouter } from 'next/navigation';
+import { PART_TYPE_LABELS, type PartSummary } from '@/modules/manufacturing/parts/api';
 
 export function PartTable({ parts }: { parts: PartSummary[] }) {
+  const router = useRouter();
+
   if (parts.length === 0) {
     return (
       <div className="surface rounded-sm px-6 py-16 text-center">
@@ -19,6 +22,8 @@ export function PartTable({ parts }: { parts: PartSummary[] }) {
           <tr>
             <Th>Part Number</Th>
             <Th>Name</Th>
+            <Th className="w-32">Type</Th>
+            <Th className="w-24">Tracking</Th>
             <Th className="w-20">Rev</Th>
             <Th className="w-32">Lifecycle</Th>
             <Th className="w-44 text-right">Created</Th>
@@ -26,9 +31,15 @@ export function PartTable({ parts }: { parts: PartSummary[] }) {
         </thead>
         <tbody className="divide-y divide-ink-700/60">
           {parts.map((p) => (
-            <tr key={p.id} className="hover:bg-ink-800/40 transition-colors">
-              <Td className="font-mono text-ink-100">{p.partNumber}</Td>
+            <tr
+              key={p.id}
+              onClick={() => router.push(`/manufacturing/parts/${encodeURIComponent(p.partNumber)}`)}
+              className="cursor-pointer hover:bg-ink-800/40 transition-colors"
+            >
+              <Td className="font-mono text-accent">{p.partNumber}</Td>
               <Td className="text-ink-200">{p.name}</Td>
+              <Td className="text-ink-300">{PART_TYPE_LABELS[p.partType] ?? p.partType}</Td>
+              <Td className="text-ink-400">{p.traceabilityType}</Td>
               <Td className="font-mono text-ink-300">{p.revision}</Td>
               <Td><LifecycleBadge value={p.lifecycle} /></Td>
               <Td className="text-right font-mono tabular-nums text-ink-400">

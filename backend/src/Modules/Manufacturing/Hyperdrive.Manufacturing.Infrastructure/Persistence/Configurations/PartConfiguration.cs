@@ -39,16 +39,42 @@ internal sealed class PartConfiguration : IEntityTypeConfiguration<Part>
 
         builder.Property(p => p.CreatedAt).HasColumnName("created_at").IsRequired();
 
-        builder.OwnsMany(p => p.Attributes, a =>
+        // Part-master attributes (typed).
+        builder.Property(p => p.PartType)
+            .HasConversion<string>()
+            .HasColumnName("part_type")
+            .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(p => p.UnitOfMeasure)
+            .HasConversion<string>()
+            .HasColumnName("unit_of_measure")
+            .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(p => p.Sourcing)
+            .HasConversion<string>()
+            .HasColumnName("sourcing")
+            .HasMaxLength(16)
+            .IsRequired();
+
+        builder.Property(p => p.Material).HasColumnName("material").HasMaxLength(200);
+        builder.Property(p => p.MassGrams).HasColumnName("mass_g").HasColumnType("numeric");
+
+        builder.OwnsOne(p => p.Traceability, t =>
         {
-            a.ToTable("part_attributes");
-            a.WithOwner().HasForeignKey("part_id");
-            a.Property<long>("Id").ValueGeneratedOnAdd();
-            a.HasKey("Id");
-            a.Property(x => x.Key).HasColumnName("key").HasMaxLength(64).IsRequired();
-            a.Property(x => x.Value).HasColumnName("value").HasMaxLength(1024).IsRequired();
-            a.HasIndex("part_id", nameof(PartAttribute.Key)).IsUnique();
+            t.Property(x => x.Type)
+                .HasConversion<string>()
+                .HasColumnName("traceability_type")
+                .HasMaxLength(16)
+                .IsRequired();
+            t.Property(x => x.Assignment)
+                .HasConversion<string>()
+                .HasColumnName("serial_assignment")
+                .HasMaxLength(16);
+            t.Property(x => x.SerialFormat).HasColumnName("serial_format").HasMaxLength(64);
         });
+        builder.Navigation(p => p.Traceability).IsRequired();
 
         builder.Ignore(p => p.DomainEvents);
     }
