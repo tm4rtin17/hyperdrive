@@ -48,6 +48,16 @@ public sealed class PartRevision : Entity<PartRevisionId>
         return Result.Success();
     }
 
+    /// <summary>Restore an obsolete revision back to InWork so it can be edited and re-released.</summary>
+    internal Result RestoreToInWork()
+    {
+        if (Lifecycle == RevisionLifecycle.InWork) return Result.Success();
+        if (Lifecycle == RevisionLifecycle.Released)
+            return DomainError.Conflict("revision.restore.released", "Revision is already Released — obsolete it first if you want to restore to In Work.");
+        Lifecycle = RevisionLifecycle.InWork;
+        return Result.Success();
+    }
+
     internal Result AddLine(PartId childPartId, decimal quantity, int? findNumber, string? referenceDesignator)
     {
         var frozen = EnsureEditable();

@@ -115,6 +115,14 @@ public sealed class Part : AggregateRoot<PartId>
             : rev.Obsolete();
     }
 
+    public Result RestoreRevision(PartRevisionId revisionId)
+    {
+        var rev = FindRevision(revisionId);
+        return rev is null
+            ? DomainError.NotFound("revision.not_found", $"Revision {revisionId} not found.")
+            : rev.RestoreToInWork();
+    }
+
     /// <summary>
     /// Rolls a new revision from the current one (which must be Released), seeding its BOM
     /// from the prior revision. Returns the new revision.

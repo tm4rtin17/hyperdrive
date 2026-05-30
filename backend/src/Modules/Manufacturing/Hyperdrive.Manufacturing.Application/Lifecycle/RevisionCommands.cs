@@ -7,6 +7,7 @@ namespace Hyperdrive.Manufacturing.Application.Lifecycle;
 
 public sealed record ReleaseRevisionCommand(Guid PartId, Guid RevisionId);
 public sealed record ObsoleteRevisionCommand(Guid PartId, Guid RevisionId);
+public sealed record RestoreRevisionCommand(Guid PartId, Guid RevisionId);
 public sealed record CreateNextRevisionCommand(Guid PartId);
 
 public sealed class ReleaseRevisionHandler(IPartRepository repository, IUnitOfWork uow, IClock clock)
@@ -34,6 +35,22 @@ public sealed class ObsoleteRevisionHandler(IPartRepository repository, IUnitOfW
             return DomainError.NotFound("part.not_found", $"Part {cmd.PartId} not found.");
 
         var result = part.ObsoleteRevision(new PartRevisionId(cmd.RevisionId));
+        if (result.IsFailure) return result;
+
+        await uow.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class RestoreRevisionHandler(IPartRepository repository, IUnitOfWork uow)
+{
+    public async Task<Result> HandleAsync(RestoreRevisionCommand cmd, CancellationToken ct)
+    {
+        var part = await repository.GetAsync(new PartId(cmd.PartId), ct);
+        if (part is null)
+            return DomainError.NotFound("part.not_found", $"Part {cmd.PartId} not found.");
+
+        var result = part.RestoreRevision(new PartRevisionId(cmd.RevisionId));
         if (result.IsFailure) return result;
 
         await uow.SaveChangesAsync(ct);

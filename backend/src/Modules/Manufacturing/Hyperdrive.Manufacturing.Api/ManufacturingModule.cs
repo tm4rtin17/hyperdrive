@@ -24,6 +24,7 @@ public static class ManufacturingModule
 
         services.AddScoped<ReleaseRevisionHandler>();
         services.AddScoped<ObsoleteRevisionHandler>();
+        services.AddScoped<RestoreRevisionHandler>();
         services.AddScoped<CreateNextRevisionHandler>();
         services.AddScoped<AddBomLineHandler>();
         services.AddScoped<UpdateBomLineHandler>();

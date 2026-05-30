@@ -100,6 +100,15 @@ export function RevisionPanel({
             Obsolete {selected.rev}
           </button>
         )}
+        {selected.lifecycle === 'Obsolete' && (
+          <button
+            onClick={() => run(() => lifecycleApi.restoreRevision(partId, selected.id))}
+            disabled={pending}
+            className="h-8 px-3 text-xs uppercase tracking-wider border border-signal-ok/40 text-signal-ok rounded-sm hover:bg-signal-ok/10 disabled:opacity-50"
+          >
+            Restore {selected.rev}
+          </button>
+        )}
         {error && <span className="text-xs text-signal-alert font-mono">{error}</span>}
       </div>
     </section>

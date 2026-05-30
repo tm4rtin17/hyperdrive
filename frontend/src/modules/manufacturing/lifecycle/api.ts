@@ -50,6 +50,9 @@ export const lifecycleApi = {
   obsoleteRevision: (partId: string, revId: string) =>
     api<void>(`${base(partId)}/${revId}/obsolete`, { method: 'POST' }),
 
+  restoreRevision: (partId: string, revId: string) =>
+    api<void>(`${base(partId)}/${revId}/restore`, { method: 'POST' }),
+
   getBom: (partId: string, revId: string) =>
     api<BomLine[]>(`${base(partId)}/${revId}/bom`),
 

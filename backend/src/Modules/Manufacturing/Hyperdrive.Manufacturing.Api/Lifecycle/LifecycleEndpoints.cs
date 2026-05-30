@@ -17,6 +17,7 @@ internal static class LifecycleEndpoints
         revs.MapPost("/", CreateNextRevision).WithName("CreateNextRevision");
         revs.MapPost("/{revId:guid}/release", ReleaseRevision).WithName("ReleaseRevision");
         revs.MapPost("/{revId:guid}/obsolete", ObsoleteRevision).WithName("ObsoleteRevision");
+        revs.MapPost("/{revId:guid}/restore", RestoreRevision).WithName("RestoreRevision");
         revs.MapGet("/{revId:guid}/bom", GetBom).WithName("GetBom");
         revs.MapPost("/{revId:guid}/bom", AddBomLine).WithName("AddBomLine");
         revs.MapPut("/{revId:guid}/bom/{lineId:guid}", UpdateBomLine).WithName("UpdateBomLine");
@@ -47,6 +48,13 @@ internal static class LifecycleEndpoints
         Guid partId, Guid revId, ObsoleteRevisionHandler handler, CancellationToken ct)
     {
         var result = await handler.HandleAsync(new ObsoleteRevisionCommand(partId, revId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> RestoreRevision(
+        Guid partId, Guid revId, RestoreRevisionHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new RestoreRevisionCommand(partId, revId), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
