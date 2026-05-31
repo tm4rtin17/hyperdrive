@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Hyperdrive.Manufacturing.Application</AssemblyName>
+    <RootNamespace>Hyperdrive.Manufacturing.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hyperdrive.Manufacturing.Domain\Hyperdrive.Manufacturing.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Hyperdrive.SharedKernel\Hyperdrive.SharedKernel.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+</Project>
