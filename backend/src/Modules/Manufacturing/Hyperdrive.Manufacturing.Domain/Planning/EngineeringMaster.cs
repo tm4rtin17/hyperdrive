@@ -77,7 +77,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         return operation;
     }
 
-    public Result UpdateOperation(OperationId operationId, int sequence, string name)
+    public Result UpdateOperation(OperationId operationId, int sequence, string name, string instructions)
     {
         if (string.IsNullOrWhiteSpace(name))
             return DomainError.Validation("operation.name.empty", "Operation name is required.");
@@ -86,7 +86,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         if (operation is null)
             return DomainError.NotFound("operation.not_found", $"Operation {operationId} not found.");
 
-        operation.Update(sequence, name);
+        operation.Update(sequence, name, instructions);
         return Result.Success();
     }
 

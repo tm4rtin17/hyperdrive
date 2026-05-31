@@ -23,6 +23,13 @@ internal static class EngineeringMasterEndpoints
 
         masters.MapPut("/{id:guid}/sequence", UpdateSequence).WithName("UpdateSequence");
 
+        masters.MapPost("/{id:guid}/operations/{opId:guid}/attachments",
+            UploadOpAttachment).WithName("UploadOperationAttachment").DisableAntiforgery();
+        masters.MapDelete("/{id:guid}/operations/{opId:guid}/attachments/{attachmentId:guid}",
+            DeleteOpAttachment).WithName("DeleteOperationAttachment");
+        masters.MapGet("/{id:guid}/operations/{opId:guid}/attachments/{attachmentId:guid}/file",
+            DownloadOpAttachment).WithName("DownloadOperationAttachment");
+
         masters.MapPost("/{id:guid}/operations/{opId:guid}/steps", AddStep).WithName("AddStep");
         masters.MapPut("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}", UpdateStep).WithName("UpdateStep");
         masters.MapDelete("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}", RemoveStep).WithName("RemoveStep");
@@ -69,7 +76,7 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateOperation(
         Guid id, Guid opId, UpdateOperationBody body, UpdateOperationHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new UpdateOperationCommand(id, opId, body.Sequence, body.Name), ct);
+        var result = await handler.HandleAsync(new UpdateOperationCommand(id, opId, body.Sequence, body.Name, body.Instructions ?? string.Empty), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
@@ -142,6 +149,37 @@ internal static class EngineeringMasterEndpoints
             : Results.File(a.Data, a.ContentType, a.FileName);
     }
 
+    private static async Task<IResult> UploadOpAttachment(
+        Guid id, Guid opId,
+        IFormFile file,
+        UploadOperationAttachmentHandler handler,
+        CancellationToken ct)
+    {
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var result = await handler.HandleAsync(
+            new UploadOperationAttachmentCommand(id, opId, file.FileName, file.ContentType, ms.ToArray()), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> DeleteOpAttachment(
+        Guid attachmentId, DeleteOperationAttachmentHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new DeleteOperationAttachmentCommand(attachmentId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> DownloadOpAttachment(
+        Guid attachmentId,
+        Hyperdrive.Manufacturing.Domain.Planning.IOperationAttachmentRepository repo,
+        CancellationToken ct)
+    {
+        var a = await repo.GetAsync(new Hyperdrive.Manufacturing.Domain.Planning.OperationAttachmentId(attachmentId), ct);
+        return a is null
+            ? TypedResults.NotFound()
+            : Results.File(a.Data, a.ContentType, a.FileName);
+    }
+
     private static ProblemHttpResult ToProblem(DomainError error) => error.Type switch
     {
         ErrorType.Validation => TypedResults.Problem(detail: error.Message, statusCode: 400, title: error.Code),
@@ -153,7 +191,7 @@ internal static class EngineeringMasterEndpoints
 
 internal sealed record CreateMasterBody(string PartNumber, Guid? PartId, string? PartName);
 internal sealed record AddOperationBody(string Name);
-internal sealed record UpdateOperationBody(int Sequence, string Name);
+internal sealed record UpdateOperationBody(int Sequence, string Name, string Instructions);
 internal sealed record OperationLinkBody(Guid PredecessorId, Guid SuccessorId);
 internal sealed record UpdateSequenceBody(IReadOnlyList<OperationLinkBody> Links);
 internal sealed record AddStepBody(string Title);

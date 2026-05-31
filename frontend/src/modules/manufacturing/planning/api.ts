@@ -18,10 +18,20 @@ export type Step = {
   attachments: StepAttachment[];
 };
 
+export type OperationAttachment = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  uploadedAt: string;
+};
+
 export type Operation = {
   id: string;
   sequence: number;
   name: string;
+  instructions: string;
+  attachments: OperationAttachment[];
   steps: Step[];
 };
 
@@ -74,11 +84,28 @@ export const mastersApi = {
   addOperation: (id: string, name: string) =>
     api<Operation>(`${base}/${id}/operations`, { method: 'POST', body: { name } }),
 
-  updateOperation: (id: string, opId: string, input: { sequence: number; name: string }) =>
+  updateOperation: (id: string, opId: string, input: { sequence: number; name: string; instructions: string }) =>
     api<void>(`${base}/${id}/operations/${opId}`, { method: 'PUT', body: input }),
 
   removeOperation: (id: string, opId: string) =>
     api<void>(`${base}/${id}/operations/${opId}`, { method: 'DELETE' }),
+
+  uploadOpAttachment: (id: string, opId: string, file: File): Promise<OperationAttachment> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`${base}/${id}/operations/${opId}/attachments`, { method: 'POST', body: fd })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.detail ?? 'Upload failed.');
+        return data as OperationAttachment;
+      });
+  },
+
+  deleteOpAttachment: (id: string, opId: string, attachmentId: string) =>
+    api<void>(`${base}/${id}/operations/${opId}/attachments/${attachmentId}`, { method: 'DELETE' }),
+
+  opAttachmentFileUrl: (id: string, opId: string, attachmentId: string) =>
+    `${base}/${id}/operations/${opId}/attachments/${attachmentId}/file`,
 
   updateSequence: (id: string, links: OperationLink[]) =>
     api<void>(`${base}/${id}/sequence`, { method: 'PUT', body: { links } }),

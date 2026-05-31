@@ -73,6 +73,21 @@ if (app.Environment.IsDevelopment())
             successor_id uuid NOT NULL,
             CONSTRAINT pk_operation_dependencies PRIMARY KEY (master_id, predecessor_id, successor_id)
         );
+
+        ALTER TABLE manufacturing.operations
+            ADD COLUMN IF NOT EXISTS instructions text NOT NULL DEFAULT '';
+
+        CREATE TABLE IF NOT EXISTS manufacturing.operation_attachments (
+            id uuid PRIMARY KEY,
+            operation_id uuid NOT NULL REFERENCES manufacturing.operations(id) ON DELETE CASCADE,
+            file_name varchar(256) NOT NULL,
+            content_type varchar(128) NOT NULL,
+            file_size bigint NOT NULL,
+            uploaded_at timestamptz NOT NULL,
+            data bytea NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_operation_attachments_operation_id
+            ON manufacturing.operation_attachments (operation_id);
         """);
 }
 

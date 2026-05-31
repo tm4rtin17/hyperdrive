@@ -35,22 +35,30 @@ internal sealed class EngineeringMasterReader(ManufacturingDbContext db) : IEngi
 
         if (master is null) return null;
 
-        var stepIds = master.Operations
-            .SelectMany(o => o.Steps)
-            .Select(s => s.Id.Value)
-            .ToHashSet();
+        var opIds = master.Operations.Select(o => o.Id.Value).ToHashSet();
+        var stepIds = master.Operations.SelectMany(o => o.Steps).Select(s => s.Id.Value).ToHashSet();
 
         // Load attachment metadata only — binary Data column is excluded via projection.
-        var rawAttachments = stepIds.Count == 0 ? [] :
+        var rawStepAttachments = stepIds.Count == 0 ? [] :
             await db.StepAttachments.AsNoTracking()
                 .Where(a => stepIds.Contains(a.StepId))
                 .Select(a => new { a.Id, a.StepId, a.FileName, a.ContentType, a.FileSize, a.UploadedAt })
                 .ToListAsync(ct);
 
-        var attachmentsByStep = rawAttachments.ToLookup(
+        var rawOpAttachments = opIds.Count == 0 ? [] :
+            await db.OperationAttachments.AsNoTracking()
+                .Where(a => opIds.Contains(a.OperationId))
+                .Select(a => new { a.Id, a.OperationId, a.FileName, a.ContentType, a.FileSize, a.UploadedAt })
+                .ToListAsync(ct);
+
+        var stepAttachmentsByStep = rawStepAttachments.ToLookup(
             a => a.StepId,
             a => new StepAttachmentDto(a.Id.Value, a.FileName, a.ContentType, a.FileSize, a.UploadedAt));
 
-        return master.ToDto(attachmentsByStep);
+        var opAttachmentsByOp = rawOpAttachments.ToLookup(
+            a => a.OperationId,
+            a => new OperationAttachmentDto(a.Id.Value, a.FileName, a.ContentType, a.FileSize, a.UploadedAt));
+
+        return master.ToDto(stepAttachmentsByStep, opAttachmentsByOp);
     }
 }

@@ -22,10 +22,19 @@ public sealed record EngineeringMasterSummaryDto(
     DateTimeOffset CreatedAt,
     int OperationCount);
 
+public sealed record OperationAttachmentDto(
+    Guid Id,
+    string FileName,
+    string ContentType,
+    long FileSize,
+    DateTimeOffset UploadedAt);
+
 public sealed record OperationDto(
     Guid Id,
     int Sequence,
     string Name,
+    string Instructions,
+    IReadOnlyList<OperationAttachmentDto> Attachments,
     IReadOnlyList<StepDto> Steps);
 
 public sealed record StepDto(

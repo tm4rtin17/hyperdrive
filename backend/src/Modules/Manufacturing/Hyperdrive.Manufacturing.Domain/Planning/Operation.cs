@@ -13,6 +13,7 @@ public sealed class Operation : Entity<OperationId>
 
     public int Sequence { get; private set; }
     public string Name { get; private set; } = default!;
+    public string Instructions { get; private set; } = string.Empty;
 
     public IReadOnlyCollection<OperationStep> Steps => _steps;
 
@@ -26,10 +27,11 @@ public sealed class Operation : Entity<OperationId>
         Name = name.Trim();
     }
 
-    internal void Update(int sequence, string name)
+    internal void Update(int sequence, string name, string instructions)
     {
         Sequence = sequence;
         Name = name.Trim();
+        Instructions = instructions ?? string.Empty;
     }
 
     internal OperationStep AddStep(string title)

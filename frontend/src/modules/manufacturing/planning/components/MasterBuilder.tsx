@@ -7,6 +7,7 @@ import {
   mastersApi,
   type EngineeringMaster,
   type Operation,
+  type OperationAttachment,
   type Step,
   type StepAttachment,
 } from '@/modules/manufacturing/planning/api';
@@ -156,11 +157,21 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
 }) {
   const [opName, setOpName] = useState(operation.name);
   const [opSeq, setOpSeq] = useState(String(operation.sequence));
+  const [opInstructions, setOpInstructions] = useState(operation.instructions ?? '');
   const [newStepTitle, setNewStepTitle] = useState('');
   const parsedSeq = parseInt(opSeq, 10);
-  const dirty = (opName.trim() !== '' && opName.trim() !== operation.name) ||
+  const headerDirty = (opName.trim() !== '' && opName.trim() !== operation.name) ||
     (!isNaN(parsedSeq) && parsedSeq !== operation.sequence);
+  const instructionsDirty = opInstructions !== (operation.instructions ?? '');
   const sortedSteps = [...operation.steps].sort((a, b) => a.order - b.order);
+
+  function saveOp() {
+    run(() => mastersApi.updateOperation(masterId, operation.id, {
+      sequence: isNaN(parsedSeq) ? operation.sequence : parsedSeq,
+      name: opName.trim(),
+      instructions: opInstructions,
+    }));
+  }
 
   return (
     <>
@@ -174,9 +185,9 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
           className="w-16 h-9 bg-ink-950 border hairline rounded-sm px-2 text-sm font-mono text-ink-100 focus:outline-none focus:border-accent text-center shrink-0" />
         <input value={opName} onChange={(e) => setOpName(e.target.value)}
           className="flex-1 h-9 bg-ink-950 border hairline rounded-sm px-3 text-base text-ink-100 focus:outline-none focus:border-accent" />
-        {dirty && (
+        {headerDirty && (
           <button
-            onClick={() => run(() => mastersApi.updateOperation(masterId, operation.id, { sequence: isNaN(parsedSeq) ? operation.sequence : parsedSeq, name: opName.trim() }))}
+            onClick={saveOp}
             disabled={pending}
             className="h-9 px-3 text-xs uppercase tracking-wider text-accent border border-accent/30 rounded-sm hover:bg-accent/15 disabled:opacity-50 shrink-0">
             Save
@@ -189,6 +200,19 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
           Remove
         </button>
       </div>
+
+      {/* Op-level instructions editor */}
+      <OpInstructionsEditor
+        masterId={masterId}
+        opId={operation.id}
+        value={opInstructions}
+        onChange={setOpInstructions}
+        attachments={operation.attachments ?? []}
+        dirty={instructionsDirty}
+        pending={pending}
+        onSave={saveOp}
+        onAttachmentChange={() => run(() => Promise.resolve())}
+      />
 
       {/* Step cards (scrollable) */}
       <div className="flex-1 overflow-y-auto">
@@ -268,6 +292,292 @@ function htmlToText(html: string): string {
     .replace(/<[^>]+>/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+// ── Op instructions editor ────────────────────────────────────────────────────
+
+function OpInstructionsEditor({ masterId, opId, value, onChange, attachments, dirty, pending, onSave, onAttachmentChange }: {
+  masterId: string; opId: string;
+  value: string; onChange: (v: string) => void;
+  attachments: OperationAttachment[];
+  dirty: boolean; pending: boolean;
+  onSave: () => void;
+  onAttachmentChange: () => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [htmlMode, setHtmlMode] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  function toggleHtmlMode() {
+    onChange(htmlMode ? htmlToText(value) : textToHtml(value));
+    setHtmlMode((m) => !m);
+  }
+
+  function insertList(type: 'bullet' | 'numbered') {
+    const el = bodyRef.current;
+    if (!el) return;
+    const { selectionStart, selectionEnd, value: v } = el;
+    const before = v.slice(0, selectionStart);
+    const selected = v.slice(selectionStart, selectionEnd);
+    const after = v.slice(selectionEnd);
+
+    if (selectionStart === selectionEnd) {
+      const prefix = type === 'bullet' ? '- ' : '1. ';
+      const newValue = before + prefix + after;
+      onChange(newValue);
+      requestAnimationFrame(() => {
+        el.selectionStart = el.selectionEnd = selectionStart + prefix.length;
+        el.focus();
+      });
+      return;
+    }
+
+    const lines = selected.split('\n');
+    const formatted = lines
+      .map((line, i) => (type === 'bullet' ? '- ' : `${i + 1}. `) + line)
+      .join('\n');
+    onChange(before + formatted + after);
+    requestAnimationFrame(() => {
+      el.selectionStart = selectionStart;
+      el.selectionEnd = selectionStart + formatted.length;
+      el.focus();
+    });
+  }
+
+  return (
+    <div className="border-b hairline bg-ink-900/30 shrink-0">
+      {/* Section header */}
+      <div className="flex items-center gap-2 px-5 py-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="text-ink-500 hover:text-ink-200 transition-colors shrink-0">
+          <svg
+            width="12" height="12" viewBox="0 0 12 12" fill="currentColor"
+            className={`transition-transform duration-150 ${collapsed ? '-rotate-90' : ''}`}
+            aria-hidden="true">
+            <path d="M6 8.5L1 3.5h10L6 8.5z"/>
+          </svg>
+        </button>
+        <span className="text-[10px] uppercase tracking-widest text-ink-400 flex-1">Op Instructions</span>
+        {dirty && !collapsed && (
+          <button
+            onClick={onSave}
+            disabled={pending}
+            className="h-7 px-3 text-xs uppercase tracking-wider text-accent border border-accent/30 rounded-sm hover:bg-accent/15 disabled:opacity-50">
+            Save
+          </button>
+        )}
+      </div>
+
+      {/* Editor body */}
+      {!collapsed && (
+        <div className="grid grid-cols-[1fr_260px] divide-x divide-ink-700/60 border-t hairline min-h-[8rem]">
+          {/* Instructions body */}
+          <div className="flex flex-col">
+            {/* Toolbar */}
+            <div className="flex gap-1 px-3 pt-2 pb-1 border-b hairline bg-ink-900/20">
+              <button
+                type="button"
+                onClick={() => insertList('bullet')}
+                title="Bulleted list"
+                disabled={htmlMode}
+                className="w-8 h-7 flex items-center justify-center border hairline text-ink-300 rounded-sm hover:border-accent hover:text-accent transition-colors disabled:opacity-30 disabled:pointer-events-none">
+                <svg width="15" height="13" viewBox="0 0 15 13" fill="currentColor" aria-hidden="true">
+                  <circle cx="1.5" cy="1.5" r="1.5"/>
+                  <rect x="5" y="0.5" width="10" height="2" rx="0.5"/>
+                  <circle cx="1.5" cy="6.5" r="1.5"/>
+                  <rect x="5" y="5.5" width="10" height="2" rx="0.5"/>
+                  <circle cx="1.5" cy="11.5" r="1.5"/>
+                  <rect x="5" y="10.5" width="10" height="2" rx="0.5"/>
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => insertList('numbered')}
+                title="Numbered list"
+                disabled={htmlMode}
+                className="w-8 h-7 flex items-center justify-center border hairline text-ink-300 rounded-sm hover:border-accent hover:text-accent transition-colors disabled:opacity-30 disabled:pointer-events-none">
+                <svg width="15" height="13" viewBox="0 0 15 13" fill="currentColor" aria-hidden="true">
+                  <text x="0" y="3.5" fontSize="5.5" fontFamily="sans-serif" fontWeight="600">1.</text>
+                  <rect x="6" y="0.5" width="9" height="2" rx="0.5"/>
+                  <text x="0" y="8.5" fontSize="5.5" fontFamily="sans-serif" fontWeight="600">2.</text>
+                  <rect x="6" y="5.5" width="9" height="2" rx="0.5"/>
+                  <text x="0" y="13" fontSize="5.5" fontFamily="sans-serif" fontWeight="600">3.</text>
+                  <rect x="6" y="10.5" width="9" height="2" rx="0.5"/>
+                </svg>
+              </button>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={toggleHtmlMode}
+                title={htmlMode ? 'Switch to plain text' : 'Switch to HTML'}
+                className={`h-7 px-2 font-mono text-xs border rounded-sm transition-colors ${
+                  htmlMode
+                    ? 'border-accent text-accent bg-accent/10'
+                    : 'border-hairline text-ink-300 hover:border-accent hover:text-accent'
+                }`}>
+                {'</>'}
+              </button>
+            </div>
+            <div className="p-4 flex-1">
+              <textarea
+                ref={bodyRef}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={htmlMode ? '<p>Enter HTML…</p>' : 'Describe the overall goal and context for this operation…'}
+                rows={4}
+                className={`w-full bg-transparent text-sm text-ink-100 leading-relaxed focus:outline-none resize-none placeholder:text-ink-600 ${htmlMode ? 'font-mono' : ''}`}
+              />
+            </div>
+          </div>
+
+          {/* Attachments panel */}
+          <OpAttachmentsPanel
+            masterId={masterId}
+            opId={opId}
+            attachments={attachments}
+            pending={pending}
+            onUploaded={onAttachmentChange}
+            onDeleted={onAttachmentChange}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Op attachments panel ──────────────────────────────────────────────────────
+
+function OpAttachmentsPanel({ masterId, opId, attachments, pending, onUploaded, onDeleted }: {
+  masterId: string; opId: string;
+  attachments: OperationAttachment[]; pending: boolean;
+  onUploaded: () => void; onDeleted: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        await mastersApi.uploadOpAttachment(masterId, opId, file);
+      }
+      onUploaded();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function handleDelete(attachmentId: string) {
+    try {
+      await mastersApi.deleteOpAttachment(masterId, opId, attachmentId);
+      onDeleted();
+    } catch { /* ignore */ }
+  }
+
+  function onDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes('Files')) setDragging(true);
+  }
+
+  function onDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setDragging(false);
+  }
+
+  function onDragOver(e: React.DragEvent) { e.preventDefault(); }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragging(false);
+    handleFiles(e.dataTransfer.files);
+  }
+
+  const isImage = (ct: string) => ct.startsWith('image/');
+
+  return (
+    <div
+      className={`p-4 flex flex-col gap-3 transition-colors ${dragging ? 'bg-accent/5' : ''}`}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-widest text-ink-400">Attachments</span>
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading || pending}
+          className="h-7 px-2 text-xs uppercase tracking-wider border hairline text-ink-300 rounded-sm hover:border-accent hover:text-accent disabled:opacity-40 transition-colors">
+          {uploading ? 'Uploading…' : 'Upload'}
+        </button>
+        <input ref={inputRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+          className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+      </div>
+
+      {uploadError && <div className="text-[10px] text-signal-alert font-mono">{uploadError}</div>}
+
+      {attachments.length === 0 && !uploading ? (
+        <button onClick={() => inputRef.current?.click()}
+          className={`flex flex-col items-center justify-center h-20 border border-dashed rounded-sm text-xs gap-1 transition-colors ${
+            dragging
+              ? 'border-accent text-accent bg-accent/10'
+              : 'border-ink-700 text-ink-500 hover:border-ink-500 hover:text-ink-300'
+          }`}>
+          <span className="text-xl leading-none">{dragging ? '↓' : '+'}</span>
+          <span>{dragging ? 'Drop to upload' : 'Add photo or file'}</span>
+        </button>
+      ) : (
+        <>
+          {dragging && (
+            <div className="flex items-center justify-center h-10 border border-dashed border-accent rounded-sm text-xs text-accent gap-1">
+              <span>↓</span><span>Drop to upload</span>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {attachments.map((a) => (
+              <div key={a.id} className="group relative">
+                {isImage(a.contentType) ? (
+                  <a href={mastersApi.opAttachmentFileUrl(masterId, opId, a.id)}
+                    target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={mastersApi.opAttachmentFileUrl(masterId, opId, a.id)}
+                      alt={a.fileName}
+                      className="w-full h-20 object-cover rounded-sm border hairline hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                ) : (
+                  <a href={mastersApi.opAttachmentFileUrl(masterId, opId, a.id)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex flex-col items-center justify-center h-20 bg-ink-800 border hairline rounded-sm hover:bg-ink-700 transition-colors gap-1 text-center px-1">
+                    <span className="text-lg leading-none text-ink-300">📎</span>
+                    <span className="text-[9px] text-ink-400 truncate w-full text-center">{a.fileName}</span>
+                  </a>
+                )}
+                <button
+                  onClick={() => handleDelete(a.id)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-ink-900/80 text-signal-alert text-[10px] leading-none opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-signal-alert hover:text-white">
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 // ── Step card ─────────────────────────────────────────────────────────────────

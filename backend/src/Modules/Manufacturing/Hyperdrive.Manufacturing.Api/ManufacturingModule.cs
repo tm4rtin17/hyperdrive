@@ -25,6 +25,8 @@ public static class ManufacturingModule
         services.AddScoped<RemoveStepHandler>();
         services.AddScoped<UploadStepAttachmentHandler>();
         services.AddScoped<DeleteStepAttachmentHandler>();
+        services.AddScoped<UploadOperationAttachmentHandler>();
+        services.AddScoped<DeleteOperationAttachmentHandler>();
 
         return services;
     }
