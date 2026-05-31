@@ -141,7 +141,7 @@ function OpTile({ op, selected, onClick }: { op: Operation; selected: boolean; o
       </div>
       <div className={`text-xs truncate mt-0.5 ${selected ? 'text-accent/80' : 'text-ink-300'}`}>{op.name}</div>
       <div className="text-[10px] text-ink-500 mt-1">
-        {op.steps.length} step{op.steps.length !== 1 ? 's' : ''}
+        {op.steps.length > 0 ? 'Has instructions' : 'No instructions'}
       </div>
     </button>
   );
@@ -156,11 +156,10 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
 }) {
   const [opName, setOpName] = useState(operation.name);
   const [opSeq, setOpSeq] = useState(String(operation.sequence));
-  const [newStepTitle, setNewStepTitle] = useState('');
   const parsedSeq = parseInt(opSeq, 10);
   const dirty = (opName.trim() !== '' && opName.trim() !== operation.name) ||
     (!isNaN(parsedSeq) && parsedSeq !== operation.sequence);
-  const sortedSteps = [...operation.steps].sort((a, b) => a.order - b.order);
+  const step = [...operation.steps].sort((a, b) => a.order - b.order)[0] ?? null;
 
   return (
     <>
@@ -190,33 +189,22 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
         </button>
       </div>
 
-      {/* Step cards (scrollable) */}
+      {/* Single-step instructions editor */}
       <div className="flex-1 overflow-y-auto">
-        {sortedSteps.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-xs text-ink-500">
-            No steps yet — add one below.
+        {step === null ? (
+          <div className="flex items-center justify-center h-40">
+            <button
+              onClick={() => run(() => mastersApi.addStep(masterId, operation.id, 'Instructions'))}
+              disabled={pending}
+              className="h-9 px-4 text-xs uppercase tracking-wider bg-accent/15 text-accent border border-accent/30 rounded-sm hover:bg-accent/25 disabled:opacity-40">
+              + Add Instructions
+            </button>
           </div>
         ) : (
-          <div className="p-5 space-y-4">
-            {sortedSteps.map((step) => (
-              <StepCard key={step.id} masterId={masterId} opId={operation.id} step={step} pending={pending} run={run} />
-            ))}
+          <div className="p-5">
+            <StepCard masterId={masterId} opId={operation.id} step={step} pending={pending} run={run} />
           </div>
         )}
-      </div>
-
-      {/* Add step */}
-      <div className="flex gap-2 px-5 py-4 border-t hairline shrink-0">
-        <input value={newStepTitle} onChange={(e) => setNewStepTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && newStepTitle.trim()) run(() => mastersApi.addStep(masterId, operation.id, newStepTitle.trim()), () => setNewStepTitle('')); }}
-          placeholder="New step title…"
-          className="flex-1 h-10 bg-ink-950 border hairline rounded-sm px-3 text-sm text-ink-100 focus:outline-none focus:border-accent" />
-        <button
-          onClick={() => run(() => mastersApi.addStep(masterId, operation.id, newStepTitle.trim()), () => setNewStepTitle(''))}
-          disabled={pending || !newStepTitle.trim()}
-          className="h-10 px-4 text-xs uppercase tracking-wider bg-accent/15 text-accent border border-accent/30 rounded-sm hover:bg-accent/25 disabled:opacity-40 shrink-0">
-          Add Step
-        </button>
       </div>
     </>
   );
@@ -280,12 +268,9 @@ function StepCard({ masterId, opId, step, pending, run }: {
   const [collapsed, setCollapsed] = useState(false);
   const [title, setTitle] = useState(step.title);
   const [body, setBody] = useState(step.body);
-  const [stepOrder, setStepOrder] = useState(String(step.order));
   const [htmlMode, setHtmlMode] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const parsedOrder = parseInt(stepOrder, 10);
-  const dirty = (title.trim() !== step.title && title.trim() !== '') || body !== step.body ||
-    (!isNaN(parsedOrder) && parsedOrder !== step.order);
+  const dirty = (title.trim() !== step.title && title.trim() !== '') || body !== step.body;
 
   function toggleHtmlMode() {
     setBody((prev) => (htmlMode ? htmlToText(prev) : textToHtml(prev)));
@@ -325,7 +310,7 @@ function StepCard({ masterId, opId, step, pending, run }: {
 
   return (
     <div className="surface border hairline rounded-sm overflow-hidden">
-      {/* Header bar: step number + title + actions */}
+      {/* Header bar: title + actions */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-ink-800/50 border-b hairline">
         <button
           type="button"
@@ -338,18 +323,12 @@ function StepCard({ masterId, opId, step, pending, run }: {
             <path d="M6 8.5L1 3.5h10L6 8.5z"/>
           </svg>
         </button>
-        <span className="font-mono text-sm font-semibold text-ink-300 shrink-0">Step</span>
-        <input
-          value={stepOrder}
-          onChange={(e) => setStepOrder(e.target.value)}
-          inputMode="numeric"
-          className="w-14 h-8 bg-ink-950 border hairline rounded-sm px-2 text-sm font-mono text-ink-100 focus:outline-none focus:border-accent text-center shrink-0" />
         <input value={title} onChange={(e) => setTitle(e.target.value)}
-          placeholder="Step title…"
+          placeholder="Instructions title…"
           className="flex-1 h-8 bg-ink-950 border hairline rounded-sm px-2 text-sm text-ink-100 focus:outline-none focus:border-accent" />
         {dirty && (
           <button
-            onClick={() => run(() => mastersApi.updateStep(masterId, opId, step.id, { order: isNaN(parsedOrder) ? step.order : parsedOrder, title: title.trim(), body }))}
+            onClick={() => run(() => mastersApi.updateStep(masterId, opId, step.id, { order: step.order, title: title.trim(), body }))}
             disabled={pending}
             className="h-8 px-3 text-xs uppercase tracking-wider text-accent border border-accent/30 rounded-sm hover:bg-accent/15 disabled:opacity-50 shrink-0">
             Save
