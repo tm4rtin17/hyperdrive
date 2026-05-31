@@ -2,10 +2,20 @@ import { api } from '@/shared/lib/api/client';
 
 export type EngineeringMasterStatus = 'Draft' | 'Released';
 
+export type StepAttachment = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  uploadedAt: string;
+};
+
 export type Step = {
   id: string;
   order: number;
-  text: string;
+  title: string;
+  body: string;
+  attachments: StepAttachment[];
 };
 
 export type Operation = {
@@ -41,6 +51,8 @@ export type CreateMasterInput = {
 };
 
 const base = '/api/manufacturing/engineering-masters';
+const stepBase = (id: string, opId: string, stepId: string) =>
+  `${base}/${id}/operations/${opId}/steps/${stepId}`;
 
 export const mastersApi = {
   list: (opts?: { search?: string }) => {
@@ -62,12 +74,29 @@ export const mastersApi = {
   removeOperation: (id: string, opId: string) =>
     api<void>(`${base}/${id}/operations/${opId}`, { method: 'DELETE' }),
 
-  addStep: (id: string, opId: string, text: string) =>
-    api<Step>(`${base}/${id}/operations/${opId}/steps`, { method: 'POST', body: { text } }),
+  addStep: (id: string, opId: string, title: string) =>
+    api<Step>(`${base}/${id}/operations/${opId}/steps`, { method: 'POST', body: { title } }),
 
-  updateStep: (id: string, opId: string, stepId: string, text: string) =>
-    api<void>(`${base}/${id}/operations/${opId}/steps/${stepId}`, { method: 'PUT', body: { text } }),
+  updateStep: (id: string, opId: string, stepId: string, input: { title: string; body: string }) =>
+    api<void>(`${stepBase(id, opId, stepId)}`, { method: 'PUT', body: input }),
 
   removeStep: (id: string, opId: string, stepId: string) =>
-    api<void>(`${base}/${id}/operations/${opId}/steps/${stepId}`, { method: 'DELETE' }),
+    api<void>(`${stepBase(id, opId, stepId)}`, { method: 'DELETE' }),
+
+  uploadAttachment: (id: string, opId: string, stepId: string, file: File): Promise<StepAttachment> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`/api${stepBase(id, opId, stepId)}/attachments`, { method: 'POST', body: fd })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.detail ?? 'Upload failed.');
+        return data as StepAttachment;
+      });
+  },
+
+  deleteAttachment: (id: string, opId: string, stepId: string, attachmentId: string) =>
+    api<void>(`${stepBase(id, opId, stepId)}/attachments/${attachmentId}`, { method: 'DELETE' }),
+
+  attachmentFileUrl: (id: string, opId: string, stepId: string, attachmentId: string) =>
+    `/api${stepBase(id, opId, stepId)}/attachments/${attachmentId}/file`,
 };

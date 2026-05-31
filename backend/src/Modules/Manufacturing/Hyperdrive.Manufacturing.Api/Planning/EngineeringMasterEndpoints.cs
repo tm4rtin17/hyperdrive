@@ -25,6 +25,14 @@ internal static class EngineeringMasterEndpoints
         masters.MapPut("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}", UpdateStep).WithName("UpdateStep");
         masters.MapDelete("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}", RemoveStep).WithName("RemoveStep");
 
+        // Attachment upload uses multipart/form-data — antiforgery is disabled for API clients.
+        masters.MapPost("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}/attachments",
+            UploadAttachment).WithName("UploadStepAttachment").DisableAntiforgery();
+        masters.MapDelete("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}/attachments/{attachmentId:guid}",
+            DeleteAttachment).WithName("DeleteStepAttachment");
+        masters.MapGet("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}/attachments/{attachmentId:guid}/file",
+            DownloadAttachment).WithName("DownloadStepAttachment");
+
         return group;
     }
 
@@ -73,14 +81,14 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> AddStep(
         Guid id, Guid opId, AddStepBody body, AddStepHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new AddStepCommand(id, opId, body.Text), ct);
+        var result = await handler.HandleAsync(new AddStepCommand(id, opId, body.Title), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : ToProblem(result.Error);
     }
 
     private static async Task<IResult> UpdateStep(
         Guid id, Guid opId, Guid stepId, UpdateStepBody body, UpdateStepHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Text), ct);
+        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Title, body.Body), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
@@ -89,6 +97,37 @@ internal static class EngineeringMasterEndpoints
     {
         var result = await handler.HandleAsync(new RemoveStepCommand(id, opId, stepId), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> UploadAttachment(
+        Guid id, Guid opId, Guid stepId,
+        IFormFile file,
+        UploadStepAttachmentHandler handler,
+        CancellationToken ct)
+    {
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var result = await handler.HandleAsync(
+            new UploadStepAttachmentCommand(id, opId, stepId, file.FileName, file.ContentType, ms.ToArray()), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> DeleteAttachment(
+        Guid attachmentId, DeleteStepAttachmentHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new DeleteStepAttachmentCommand(attachmentId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> DownloadAttachment(
+        Guid attachmentId,
+        Hyperdrive.Manufacturing.Domain.Planning.IStepAttachmentRepository repo,
+        CancellationToken ct)
+    {
+        var a = await repo.GetAsync(new Hyperdrive.Manufacturing.Domain.Planning.StepAttachmentId(attachmentId), ct);
+        return a is null
+            ? TypedResults.NotFound()
+            : Results.File(a.Data, a.ContentType, a.FileName);
     }
 
     private static ProblemHttpResult ToProblem(DomainError error) => error.Type switch
@@ -103,5 +142,5 @@ internal static class EngineeringMasterEndpoints
 internal sealed record CreateMasterBody(string PartNumber, Guid? PartId, string? PartName);
 internal sealed record AddOperationBody(string Name);
 internal sealed record UpdateOperationBody(int Sequence, string Name);
-internal sealed record AddStepBody(string Text);
-internal sealed record UpdateStepBody(string Text);
+internal sealed record AddStepBody(string Title);
+internal sealed record UpdateStepBody(string Title, string Body);

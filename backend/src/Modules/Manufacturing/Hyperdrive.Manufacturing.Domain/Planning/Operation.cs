@@ -32,20 +32,20 @@ public sealed class Operation : Entity<OperationId>
         Name = name.Trim();
     }
 
-    internal OperationStep AddStep(string text)
+    internal OperationStep AddStep(string title)
     {
         var order = _steps.Count == 0 ? 10 : _steps.Max(s => s.Order) + 10;
-        var step = new OperationStep(order, text);
+        var step = new OperationStep(order, title);
         _steps.Add(step);
         return step;
     }
 
-    internal Result UpdateStep(StepId stepId, string text)
+    internal Result UpdateStep(StepId stepId, string title, string body)
     {
         var step = _steps.FirstOrDefault(s => s.Id == stepId);
         if (step is null)
             return DomainError.NotFound("step.not_found", $"Step {stepId} not found.");
-        step.UpdateText(text);
+        step.Update(title, body);
         return Result.Success();
     }
 

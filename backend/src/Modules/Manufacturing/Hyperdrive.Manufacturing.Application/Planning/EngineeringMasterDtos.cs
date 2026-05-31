@@ -26,4 +26,13 @@ public sealed record OperationDto(
 public sealed record StepDto(
     Guid Id,
     int Order,
-    string Text);
+    string Title,
+    string Body,
+    IReadOnlyList<StepAttachmentDto> Attachments);
+
+public sealed record StepAttachmentDto(
+    Guid Id,
+    string FileName,
+    string ContentType,
+    long FileSize,
+    DateTimeOffset UploadedAt);

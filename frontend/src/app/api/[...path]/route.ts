@@ -11,12 +11,17 @@ async function handle(req: NextRequest) {
       ? await req.arrayBuffer()
       : undefined;
 
+  const forwardHeaders: Record<string, string> = {
+    Accept: req.headers.get('accept') ?? 'application/json',
+  };
+  const ct = req.headers.get('content-type');
+  // Only forward Content-Type when the client set one. Omitting it for multipart
+  // uploads lets the browser-generated boundary pass through intact.
+  if (ct) forwardHeaders['Content-Type'] = ct;
+
   const upstream = await fetch(target, {
     method: req.method,
-    headers: {
-      'Content-Type': req.headers.get('content-type') ?? 'application/json',
-      Accept: req.headers.get('accept') ?? 'application/json',
-    },
+    headers: forwardHeaders,
     body: body && body.byteLength > 0 ? body : undefined,
   });
 

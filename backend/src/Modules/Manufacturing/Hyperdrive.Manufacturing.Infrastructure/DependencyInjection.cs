@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ManufacturingDbContext>());
         services.AddScoped<IEngineeringMasterRepository, EngineeringMasterRepository>();
         services.AddScoped<IEngineeringMasterReader, EngineeringMasterReader>();
+        services.AddScoped<IStepAttachmentRepository, StepAttachmentRepository>();
 
         return services;
     }

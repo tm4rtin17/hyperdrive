@@ -17,6 +17,7 @@ internal sealed class StepConfiguration : IEntityTypeConfiguration<OperationStep
 
         // "order" is a reserved word in SQL — use an explicit column name.
         builder.Property(s => s.Order).HasColumnName("step_order").IsRequired();
-        builder.Property(s => s.Text).HasColumnName("text").IsRequired();
+        builder.Property(s => s.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
+        builder.Property(s => s.Body).HasColumnName("body").IsRequired();
     }
 }

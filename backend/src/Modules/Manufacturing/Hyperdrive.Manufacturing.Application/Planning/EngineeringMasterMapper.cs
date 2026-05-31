@@ -4,7 +4,10 @@ namespace Hyperdrive.Manufacturing.Application.Planning;
 
 public static class EngineeringMasterMapper
 {
-    public static EngineeringMasterDto ToDto(this EngineeringMaster m) => new(
+    /// <summary>Maps a master to DTO, including attachment metadata keyed by step id.</summary>
+    public static EngineeringMasterDto ToDto(
+        this EngineeringMaster m,
+        ILookup<Guid, StepAttachmentDto>? attachments = null) => new(
         m.Id.Value,
         m.PartNumber,
         m.PartId,
@@ -18,7 +21,12 @@ public static class EngineeringMasterMapper
                 o.Sequence,
                 o.Name,
                 o.Steps.OrderBy(s => s.Order)
-                    .Select(s => new StepDto(s.Id.Value, s.Order, s.Text))
+                    .Select(s => new StepDto(
+                        s.Id.Value,
+                        s.Order,
+                        s.Title,
+                        s.Body,
+                        attachments?[s.Id.Value].ToList() ?? []))
                     .ToList()))
             .ToList());
 }

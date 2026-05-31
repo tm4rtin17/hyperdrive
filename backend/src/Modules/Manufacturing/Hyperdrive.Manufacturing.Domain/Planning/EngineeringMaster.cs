@@ -98,28 +98,28 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
 
     // === Steps (delegate to the owning operation) ===
 
-    public Result<OperationStep> AddStep(OperationId operationId, string text)
+    public Result<OperationStep> AddStep(OperationId operationId, string title)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return DomainError.Validation("step.text.empty", "Step text is required.");
+        if (string.IsNullOrWhiteSpace(title))
+            return DomainError.Validation("step.title.empty", "Step title is required.");
 
         var operation = Find(operationId);
         if (operation is null)
             return DomainError.NotFound("operation.not_found", $"Operation {operationId} not found.");
 
-        return operation.AddStep(text);
+        return operation.AddStep(title);
     }
 
-    public Result UpdateStep(OperationId operationId, StepId stepId, string text)
+    public Result UpdateStep(OperationId operationId, StepId stepId, string title, string body)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return DomainError.Validation("step.text.empty", "Step text is required.");
+        if (string.IsNullOrWhiteSpace(title))
+            return DomainError.Validation("step.title.empty", "Step title is required.");
 
         var operation = Find(operationId);
         if (operation is null)
             return DomainError.NotFound("operation.not_found", $"Operation {operationId} not found.");
 
-        return operation.UpdateStep(stepId, text);
+        return operation.UpdateStep(stepId, title, body);
     }
 
     public Result RemoveStep(OperationId operationId, StepId stepId)

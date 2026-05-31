@@ -33,6 +33,24 @@ internal sealed class EngineeringMasterReader(ManufacturingDbContext db) : IEngi
             .Include(m => m.Operations).ThenInclude(o => o.Steps)
             .FirstOrDefaultAsync(m => m.Id == new EngineeringMasterId(id), ct);
 
-        return master?.ToDto();
+        if (master is null) return null;
+
+        var stepIds = master.Operations
+            .SelectMany(o => o.Steps)
+            .Select(s => s.Id.Value)
+            .ToHashSet();
+
+        // Load attachment metadata only — binary Data column is excluded via projection.
+        var rawAttachments = stepIds.Count == 0 ? [] :
+            await db.StepAttachments.AsNoTracking()
+                .Where(a => stepIds.Contains(a.StepId))
+                .Select(a => new { a.Id, a.StepId, a.FileName, a.ContentType, a.FileSize, a.UploadedAt })
+                .ToListAsync(ct);
+
+        var attachmentsByStep = rawAttachments.ToLookup(
+            a => a.StepId,
+            a => new StepAttachmentDto(a.Id.Value, a.FileName, a.ContentType, a.FileSize, a.UploadedAt));
+
+        return master.ToDto(attachmentsByStep);
     }
 }
