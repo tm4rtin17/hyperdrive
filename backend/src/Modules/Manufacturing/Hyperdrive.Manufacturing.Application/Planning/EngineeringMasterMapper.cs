@@ -28,5 +28,8 @@ public static class EngineeringMasterMapper
                         s.Body,
                         attachments?[s.Id.Value].ToList() ?? []))
                     .ToList()))
+            .ToList(),
+        m.Dependencies
+            .Select(d => new OperationLinkDto(d.PredecessorId, d.SuccessorId))
             .ToList());
 }

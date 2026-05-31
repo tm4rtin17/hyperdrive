@@ -19,6 +19,7 @@ public static class ManufacturingModule
         services.AddScoped<AddOperationHandler>();
         services.AddScoped<UpdateOperationHandler>();
         services.AddScoped<RemoveOperationHandler>();
+        services.AddScoped<UpdateSequenceHandler>();
         services.AddScoped<AddStepHandler>();
         services.AddScoped<UpdateStepHandler>();
         services.AddScoped<RemoveStepHandler>();

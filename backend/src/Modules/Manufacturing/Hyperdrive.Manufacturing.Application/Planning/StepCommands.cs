@@ -6,7 +6,7 @@ using Hyperdrive.SharedKernel.Time;
 namespace Hyperdrive.Manufacturing.Application.Planning;
 
 public sealed record AddStepCommand(Guid MasterId, Guid OperationId, string Title);
-public sealed record UpdateStepCommand(Guid MasterId, Guid OperationId, Guid StepId, string Title, string Body);
+public sealed record UpdateStepCommand(Guid MasterId, Guid OperationId, Guid StepId, int Order, string Title, string Body);
 public sealed record RemoveStepCommand(Guid MasterId, Guid OperationId, Guid StepId);
 
 public sealed record UploadStepAttachmentCommand(
@@ -44,7 +44,7 @@ public sealed class UpdateStepHandler(IEngineeringMasterRepository repository, I
             return DomainError.NotFound("master.not_found", $"Engineering master {cmd.MasterId} not found.");
 
         var result = master.UpdateStep(
-            new OperationId(cmd.OperationId), new StepId(cmd.StepId), cmd.Title, cmd.Body);
+            new OperationId(cmd.OperationId), new StepId(cmd.StepId), cmd.Order, cmd.Title, cmd.Body);
         if (result.IsFailure) return result;
 
         await uow.SaveChangesAsync(ct);

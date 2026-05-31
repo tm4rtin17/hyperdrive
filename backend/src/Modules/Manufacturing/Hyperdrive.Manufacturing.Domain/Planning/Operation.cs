@@ -40,11 +40,12 @@ public sealed class Operation : Entity<OperationId>
         return step;
     }
 
-    internal Result UpdateStep(StepId stepId, string title, string body)
+    internal Result UpdateStep(StepId stepId, int order, string title, string body)
     {
         var step = _steps.FirstOrDefault(s => s.Id == stepId);
         if (step is null)
             return DomainError.NotFound("step.not_found", $"Step {stepId} not found.");
+        step.SetOrder(order);
         step.Update(title, body);
         return Result.Success();
     }

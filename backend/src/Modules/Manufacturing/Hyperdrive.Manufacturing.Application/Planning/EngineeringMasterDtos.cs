@@ -7,7 +7,12 @@ public sealed record EngineeringMasterDto(
     string? PartName,
     string Status,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<OperationDto> Operations);
+    IReadOnlyList<OperationDto> Operations,
+    IReadOnlyList<OperationLinkDto> Dependencies);
+
+public sealed record OperationLinkDto(
+    Guid PredecessorId,
+    Guid SuccessorId);
 
 public sealed record EngineeringMasterSummaryDto(
     Guid Id,

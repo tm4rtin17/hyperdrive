@@ -25,6 +25,11 @@ export type Operation = {
   steps: Step[];
 };
 
+export type OperationLink = {
+  predecessorId: string;
+  successorId: string;
+};
+
 export type EngineeringMaster = {
   id: string;
   partNumber: string;
@@ -33,6 +38,7 @@ export type EngineeringMaster = {
   status: EngineeringMasterStatus;
   createdAt: string;
   operations: Operation[];
+  dependencies: OperationLink[];
 };
 
 export type EngineeringMasterSummary = {
@@ -74,10 +80,13 @@ export const mastersApi = {
   removeOperation: (id: string, opId: string) =>
     api<void>(`${base}/${id}/operations/${opId}`, { method: 'DELETE' }),
 
+  updateSequence: (id: string, links: OperationLink[]) =>
+    api<void>(`${base}/${id}/sequence`, { method: 'PUT', body: { links } }),
+
   addStep: (id: string, opId: string, title: string) =>
     api<Step>(`${base}/${id}/operations/${opId}/steps`, { method: 'POST', body: { title } }),
 
-  updateStep: (id: string, opId: string, stepId: string, input: { title: string; body: string }) =>
+  updateStep: (id: string, opId: string, stepId: string, input: { order: number; title: string; body: string }) =>
     api<void>(`${stepBase(id, opId, stepId)}`, { method: 'PUT', body: input }),
 
   removeStep: (id: string, opId: string, stepId: string) =>
@@ -86,7 +95,7 @@ export const mastersApi = {
   uploadAttachment: (id: string, opId: string, stepId: string, file: File): Promise<StepAttachment> => {
     const fd = new FormData();
     fd.append('file', file);
-    return fetch(`/api${stepBase(id, opId, stepId)}/attachments`, { method: 'POST', body: fd })
+    return fetch(`${stepBase(id, opId, stepId)}/attachments`, { method: 'POST', body: fd })
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data?.detail ?? 'Upload failed.');
@@ -98,5 +107,5 @@ export const mastersApi = {
     api<void>(`${stepBase(id, opId, stepId)}/attachments/${attachmentId}`, { method: 'DELETE' }),
 
   attachmentFileUrl: (id: string, opId: string, stepId: string, attachmentId: string) =>
-    `/api${stepBase(id, opId, stepId)}/attachments/${attachmentId}/file`,
+    `${stepBase(id, opId, stepId)}/attachments/${attachmentId}/file`,
 };

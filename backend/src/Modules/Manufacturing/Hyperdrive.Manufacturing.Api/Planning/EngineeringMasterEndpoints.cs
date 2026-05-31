@@ -21,6 +21,8 @@ internal static class EngineeringMasterEndpoints
         masters.MapPut("/{id:guid}/operations/{opId:guid}", UpdateOperation).WithName("UpdateOperation");
         masters.MapDelete("/{id:guid}/operations/{opId:guid}", RemoveOperation).WithName("RemoveOperation");
 
+        masters.MapPut("/{id:guid}/sequence", UpdateSequence).WithName("UpdateSequence");
+
         masters.MapPost("/{id:guid}/operations/{opId:guid}/steps", AddStep).WithName("AddStep");
         masters.MapPut("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}", UpdateStep).WithName("UpdateStep");
         masters.MapDelete("/{id:guid}/operations/{opId:guid}/steps/{stepId:guid}", RemoveStep).WithName("RemoveStep");
@@ -78,6 +80,16 @@ internal static class EngineeringMasterEndpoints
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
+    private static async Task<IResult> UpdateSequence(
+        Guid id, UpdateSequenceBody body, UpdateSequenceHandler handler, CancellationToken ct)
+    {
+        var links = (body.Links ?? [])
+            .Select(l => new OperationLinkInput(l.PredecessorId, l.SuccessorId))
+            .ToList();
+        var result = await handler.HandleAsync(new UpdateSequenceCommand(id, links), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
     private static async Task<IResult> AddStep(
         Guid id, Guid opId, AddStepBody body, AddStepHandler handler, CancellationToken ct)
     {
@@ -88,7 +100,7 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateStep(
         Guid id, Guid opId, Guid stepId, UpdateStepBody body, UpdateStepHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Title, body.Body), ct);
+        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Order, body.Title, body.Body), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
@@ -142,5 +154,7 @@ internal static class EngineeringMasterEndpoints
 internal sealed record CreateMasterBody(string PartNumber, Guid? PartId, string? PartName);
 internal sealed record AddOperationBody(string Name);
 internal sealed record UpdateOperationBody(int Sequence, string Name);
+internal sealed record OperationLinkBody(Guid PredecessorId, Guid SuccessorId);
+internal sealed record UpdateSequenceBody(IReadOnlyList<OperationLinkBody> Links);
 internal sealed record AddStepBody(string Title);
-internal sealed record UpdateStepBody(string Title, string Body);
+internal sealed record UpdateStepBody(int Order, string Title, string Body);

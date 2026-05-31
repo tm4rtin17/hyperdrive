@@ -37,6 +37,19 @@ internal sealed class EngineeringMasterConfiguration : IEntityTypeConfiguration<
             .HasField("_operations")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        // Precedence graph: owned collection persisted to its own join table.
+        builder.OwnsMany(m => m.Dependencies, links =>
+        {
+            links.ToTable("operation_dependencies");
+            links.WithOwner().HasForeignKey("master_id");
+            links.Property(l => l.PredecessorId).HasColumnName("predecessor_id");
+            links.Property(l => l.SuccessorId).HasColumnName("successor_id");
+            links.HasKey("master_id", "PredecessorId", "SuccessorId");
+        });
+        builder.Navigation(m => m.Dependencies)
+            .HasField("_dependencies")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.Ignore(m => m.DomainEvents);
     }
 }

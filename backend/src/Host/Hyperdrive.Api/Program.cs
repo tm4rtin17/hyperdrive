@@ -61,6 +61,19 @@ if (app.Environment.IsDevelopment())
         .SingleAsync();
     if (!schemaExists)
         await mfgDb.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
+
+    // Incremental, data-preserving schema additions for volumes created before a feature landed.
+    // EnsureCreated/CreateTables only build missing schemas wholesale, so new tables on an
+    // existing database must be created idempotently here. Never drops or rewrites existing data.
+    await mfgDb.Database.ExecuteSqlRawAsync(
+        """
+        CREATE TABLE IF NOT EXISTS manufacturing.operation_dependencies (
+            master_id uuid NOT NULL REFERENCES manufacturing.engineering_masters(id) ON DELETE CASCADE,
+            predecessor_id uuid NOT NULL,
+            successor_id uuid NOT NULL,
+            CONSTRAINT pk_operation_dependencies PRIMARY KEY (master_id, predecessor_id, successor_id)
+        );
+        """);
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "hyperdrive-api" }));
