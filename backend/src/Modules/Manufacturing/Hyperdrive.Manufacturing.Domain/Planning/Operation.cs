@@ -34,7 +34,7 @@ public sealed class Operation : Entity<OperationId>
 
     internal OperationStep AddStep(string text)
     {
-        var order = _steps.Count == 0 ? 1 : _steps.Max(s => s.Order) + 1;
+        var order = _steps.Count == 0 ? 10 : _steps.Max(s => s.Order) + 10;
         var step = new OperationStep(order, text);
         _steps.Add(step);
         return step;
@@ -56,10 +56,13 @@ public sealed class Operation : Entity<OperationId>
             return DomainError.NotFound("step.not_found", $"Step {stepId} not found.");
 
         _steps.Remove(step);
-        // Re-pack ordering so steps stay 1..n contiguous.
-        var i = 1;
+        // Re-pack ordering in 10-step increments so gaps don't accumulate after removals.
+        var i = 10;
         foreach (var s in _steps.OrderBy(s => s.Order))
-            s.SetOrder(i++);
+        {
+            s.SetOrder(i);
+            i += 10;
+        }
         return Result.Success();
     }
 }
