@@ -12,6 +12,7 @@ namespace Hyperdrive.Manufacturing.Domain.Planning;
 /// </summary>
 public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
 {
+    private const int FirstSequence = 510;
     private const int SequenceStep = 10;
 
     private readonly List<Operation> _operations = new();
@@ -46,12 +47,17 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         if (partNumber.Length > 64)
             return DomainError.Validation("master.part_number.too_long", "Part number must be ≤ 64 chars.");
 
-        return new EngineeringMaster(
+        var master = new EngineeringMaster(
             EngineeringMasterId.New(),
             partNumber.Trim(),
             partId,
             string.IsNullOrWhiteSpace(partName) ? null : partName.Trim(),
             now);
+
+        // Every new master gets a default first operation at the standard starting sequence.
+        master._operations.Add(new Operation(FirstSequence, "New Operation"));
+
+        return master;
     }
 
     // === Operations ===
@@ -61,7 +67,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         if (string.IsNullOrWhiteSpace(name))
             return DomainError.Validation("operation.name.empty", "Operation name is required.");
 
-        var sequence = _operations.Count == 0 ? SequenceStep : _operations.Max(o => o.Sequence) + SequenceStep;
+        var sequence = _operations.Count == 0 ? FirstSequence : _operations.Max(o => o.Sequence) + SequenceStep;
         var operation = new Operation(sequence, name);
         _operations.Add(operation);
         return operation;
