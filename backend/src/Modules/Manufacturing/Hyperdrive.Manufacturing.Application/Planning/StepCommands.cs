@@ -6,7 +6,7 @@ using Hyperdrive.SharedKernel.Time;
 namespace Hyperdrive.Manufacturing.Application.Planning;
 
 public sealed record AddStepCommand(Guid MasterId, Guid OperationId, string Title);
-public sealed record UpdateStepCommand(Guid MasterId, Guid OperationId, Guid StepId, int Order, string Title, string Body, WorkRole? PrimaryBuyoffRole, WorkRole? SecondaryBuyoffRole);
+public sealed record UpdateStepCommand(Guid MasterId, Guid OperationId, Guid StepId, int Order, string Title, string Body, WorkRole[] PrimaryBuyoffRoles, WorkRole[] SecondaryBuyoffRoles);
 public sealed record RemoveStepCommand(Guid MasterId, Guid OperationId, Guid StepId);
 
 public sealed record UploadStepAttachmentCommand(
@@ -31,7 +31,9 @@ public sealed class AddStepHandler(IEngineeringMasterRepository repository, IUni
         await uow.SaveChangesAsync(ct);
 
         var step = result.Value!;
-        return new StepDto(step.Id.Value, step.Order, step.Title, step.Body, step.PrimaryBuyoffRole?.ToString(), step.SecondaryBuyoffRole?.ToString(), []);
+        return new StepDto(step.Id.Value, step.Order, step.Title, step.Body,
+            step.PrimaryBuyoffRoles.Select(r => r.ToString()).ToList(),
+            step.SecondaryBuyoffRoles.Select(r => r.ToString()).ToList(), []);
     }
 }
 
@@ -44,7 +46,7 @@ public sealed class UpdateStepHandler(IEngineeringMasterRepository repository, I
             return DomainError.NotFound("master.not_found", $"Engineering master {cmd.MasterId} not found.");
 
         var result = master.UpdateStep(
-            new OperationId(cmd.OperationId), new StepId(cmd.StepId), cmd.Order, cmd.Title, cmd.Body, cmd.PrimaryBuyoffRole, cmd.SecondaryBuyoffRole);
+            new OperationId(cmd.OperationId), new StepId(cmd.StepId), cmd.Order, cmd.Title, cmd.Body, cmd.PrimaryBuyoffRoles, cmd.SecondaryBuyoffRoles);
         if (result.IsFailure) return result;
 
         await uow.SaveChangesAsync(ct);

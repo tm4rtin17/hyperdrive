@@ -15,11 +15,11 @@ public sealed class Operation : Entity<OperationId>
     public string Name { get; private set; } = default!;
     public string Instructions { get; private set; } = string.Empty;
 
-    /// <summary>Role responsible for the primary buyoff of this operation. Null until assigned.</summary>
-    public WorkRole? PrimaryBuyoffRole { get; private set; }
+    /// <summary>Roles allowed to perform the primary buyoff of this operation.</summary>
+    public WorkRole[] PrimaryBuyoffRoles { get; private set; } = [];
 
-    /// <summary>Optional second-party witness/co-signoff role. Null until assigned.</summary>
-    public WorkRole? SecondaryBuyoffRole { get; private set; }
+    /// <summary>Roles allowed to perform the secondary (witness) buyoff of this operation.</summary>
+    public WorkRole[] SecondaryBuyoffRoles { get; private set; } = [];
 
     public IReadOnlyCollection<OperationStep> Steps => _steps;
 
@@ -33,13 +33,13 @@ public sealed class Operation : Entity<OperationId>
         Name = name.Trim();
     }
 
-    internal void Update(int sequence, string name, string instructions, WorkRole? primaryBuyoffRole, WorkRole? secondaryBuyoffRole)
+    internal void Update(int sequence, string name, string instructions, WorkRole[] primaryBuyoffRoles, WorkRole[] secondaryBuyoffRoles)
     {
         Sequence = sequence;
         Name = name.Trim();
         Instructions = instructions ?? string.Empty;
-        PrimaryBuyoffRole = primaryBuyoffRole;
-        SecondaryBuyoffRole = secondaryBuyoffRole;
+        PrimaryBuyoffRoles = primaryBuyoffRoles;
+        SecondaryBuyoffRoles = secondaryBuyoffRoles;
     }
 
     internal OperationStep AddStep(string title)
@@ -50,13 +50,13 @@ public sealed class Operation : Entity<OperationId>
         return step;
     }
 
-    internal Result UpdateStep(StepId stepId, int order, string title, string body, WorkRole? primaryBuyoffRole, WorkRole? secondaryBuyoffRole)
+    internal Result UpdateStep(StepId stepId, int order, string title, string body, WorkRole[] primaryBuyoffRoles, WorkRole[] secondaryBuyoffRoles)
     {
         var step = _steps.FirstOrDefault(s => s.Id == stepId);
         if (step is null)
             return DomainError.NotFound("step.not_found", $"Step {stepId} not found.");
         step.SetOrder(order);
-        step.Update(title, body, primaryBuyoffRole, secondaryBuyoffRole);
+        step.Update(title, body, primaryBuyoffRoles, secondaryBuyoffRoles);
         return Result.Success();
     }
 

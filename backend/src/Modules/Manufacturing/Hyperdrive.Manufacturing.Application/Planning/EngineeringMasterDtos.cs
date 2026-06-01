@@ -46,8 +46,8 @@ public sealed record OperationDto(
     int Sequence,
     string Name,
     string Instructions,
-    string? PrimaryBuyoffRole,
-    string? SecondaryBuyoffRole,
+    IReadOnlyList<string> PrimaryBuyoffRoles,
+    IReadOnlyList<string> SecondaryBuyoffRoles,
     IReadOnlyList<OperationAttachmentDto> Attachments,
     IReadOnlyList<StepDto> Steps);
 
@@ -56,8 +56,8 @@ public sealed record StepDto(
     int Order,
     string Title,
     string Body,
-    string? PrimaryBuyoffRole,
-    string? SecondaryBuyoffRole,
+    IReadOnlyList<string> PrimaryBuyoffRoles,
+    IReadOnlyList<string> SecondaryBuyoffRoles,
     IReadOnlyList<StepAttachmentDto> Attachments);
 
 /// <summary>A selectable work role with its display label.</summary>

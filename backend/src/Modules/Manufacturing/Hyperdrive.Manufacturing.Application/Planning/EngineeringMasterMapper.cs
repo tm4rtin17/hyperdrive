@@ -28,8 +28,8 @@ public static class EngineeringMasterMapper
                 o.Sequence,
                 o.Name,
                 o.Instructions,
-                o.PrimaryBuyoffRole?.ToString(),
-                o.SecondaryBuyoffRole?.ToString(),
+                o.PrimaryBuyoffRoles.Select(r => r.ToString()).ToList(),
+                o.SecondaryBuyoffRoles.Select(r => r.ToString()).ToList(),
                 opAttachments?[o.Id.Value].ToList() ?? [],
                 o.Steps.OrderBy(s => s.Order)
                     .Select(s => new StepDto(
@@ -37,8 +37,8 @@ public static class EngineeringMasterMapper
                         s.Order,
                         s.Title,
                         s.Body,
-                        s.PrimaryBuyoffRole?.ToString(),
-                        s.SecondaryBuyoffRole?.ToString(),
+                        s.PrimaryBuyoffRoles.Select(r => r.ToString()).ToList(),
+                        s.SecondaryBuyoffRoles.Select(r => r.ToString()).ToList(),
                         stepAttachments?[s.Id.Value].ToList() ?? []))
                     .ToList()))
             .ToList(),

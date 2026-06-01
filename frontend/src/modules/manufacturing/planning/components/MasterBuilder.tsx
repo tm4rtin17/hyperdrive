@@ -39,8 +39,8 @@ export function MasterBuilder({ master }: { master: EngineeringMaster }) {
   opsDirtyRef.current = opsDirty;
 
   // Persist unsaved edits across component remounts (e.g. router.refresh() RSC reconciliation).
-  const stepEditsRef = useRef(new Map<string, { title: string; body: string | null; order: string; role: WorkRole | null; secondaryRole: WorkRole | null }>());
-  const opEditsRef = useRef(new Map<string, { name: string; seq: string; instructions: string; role: WorkRole | null; secondaryRole: WorkRole | null }>());
+  const stepEditsRef = useRef(new Map<string, { title: string; body: string | null; order: string; roles: WorkRole[]; secondaryRoles: WorkRole[] }>());
+  const opEditsRef = useRef(new Map<string, { name: string; seq: string; instructions: string; roles: WorkRole[]; secondaryRoles: WorkRole[] }>());
 
   // Selectable buyoff roles — fetched once from the reference-data endpoint.
   const [workRoles, setWorkRoles] = useState<WorkRoleOption[]>([]);
@@ -380,28 +380,76 @@ function OpTile({ op, selected, onClick }: { op: Operation; selected: boolean; o
   );
 }
 
-// ── Primary-buyoff role selector ───────────────────────────────────────────────
+// ── Buyoff role multi-selector ────────────────────────────────────────────────
 
-function RoleSelect({ value, onChange, roles, disabled }: {
-  value: WorkRole | null;
-  onChange: (v: WorkRole | null) => void;
+function RoleMultiSelect({ value, onChange, roles, disabled }: {
+  value: WorkRole[];
+  onChange: (v: WorkRole[]) => void;
   roles: WorkRoleOption[];
   disabled?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [open]);
+
+  function toggle(role: WorkRole) {
+    onChange(value.includes(role) ? value.filter((r) => r !== role) : [...value, role]);
+  }
+
+  const label = value.length === 0
+    ? 'Unassigned'
+    : value.length === 1
+      ? (roles.find((r) => r.value === value[0])?.label ?? value[0])
+      : `${value.length} roles`;
+
   return (
-    <select
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value === '' ? null : (e.target.value as WorkRole))}
-      disabled={disabled}
-      title="Primary buyoff role"
-      className={`h-8 bg-ink-950 border hairline rounded-sm px-2 text-xs focus:outline-none focus:border-accent disabled:opacity-50 ${
-        value ? 'text-ink-100' : 'text-ink-500'
-      }`}>
-      <option value="">Unassigned</option>
-      {roles.map((r) => (
-        <option key={r.value} value={r.value} className="text-ink-100">{r.label}</option>
-      ))}
-    </select>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
+        className={`h-8 flex items-center gap-1.5 bg-ink-950 border hairline rounded-sm px-2 text-xs focus:outline-none focus:border-accent disabled:opacity-50 transition-colors ${
+          open ? 'border-accent text-ink-100' : value.length > 0 ? 'text-ink-100' : 'text-ink-500'
+        }`}>
+        <span>{label}</span>
+        <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor" className={`transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="M4 5L0 0h8L4 5z"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-20 top-full left-0 mt-1 bg-ink-900 border hairline rounded-sm shadow-xl min-w-52 py-1">
+          {roles.map((r) => {
+            const checked = value.includes(r.value as WorkRole);
+            return (
+              <label
+                key={r.value}
+                className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-ink-800 transition-colors select-none">
+                <span className={`w-3.5 h-3.5 flex items-center justify-center border rounded-sm shrink-0 transition-colors ${
+                  checked ? 'bg-accent border-accent' : 'border-ink-600'
+                }`}>
+                  {checked && (
+                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-ink-950">
+                      <path d="M1 3.5L3.5 6L8 1"/>
+                    </svg>
+                  )}
+                </span>
+                <span className={`text-xs ${checked ? 'text-ink-100' : 'text-ink-400'}`}>{r.label}</span>
+                <input type="checkbox" checked={checked} onChange={() => toggle(r.value as WorkRole)} className="sr-only" />
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -412,16 +460,16 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
   run: (fn: () => Promise<unknown>, after?: (result: unknown) => void) => void;
   onRemoved: () => void;
   onDirtyChange: (dirty: boolean, save: () => void) => void;
-  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string; role: WorkRole | null; secondaryRole: WorkRole | null }>>;
-  opEditsRef: React.MutableRefObject<Map<string, { name: string; seq: string; instructions: string; role: WorkRole | null; secondaryRole: WorkRole | null }>>;
+  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string; roles: WorkRole[]; secondaryRoles: WorkRole[] }>>;
+  opEditsRef: React.MutableRefObject<Map<string, { name: string; seq: string; instructions: string; roles: WorkRole[]; secondaryRoles: WorkRole[] }>>;
   workRoles: WorkRoleOption[];
 }) {
   const cachedOp = opEditsRef.current.get(operation.id);
   const [opName, setOpName] = useState(cachedOp?.name ?? operation.name);
   const [opSeq, setOpSeq] = useState(cachedOp?.seq ?? String(operation.sequence));
   const [opInstructions, setOpInstructions] = useState(cachedOp?.instructions ?? (operation.instructions ?? ''));
-  const [opRole, setOpRole] = useState<WorkRole | null>(cachedOp?.role ?? operation.primaryBuyoffRole);
-  const [opSecondaryRole, setOpSecondaryRole] = useState<WorkRole | null>(cachedOp?.secondaryRole ?? operation.secondaryBuyoffRole);
+  const [opRoles, setOpRoles] = useState<WorkRole[]>(cachedOp?.roles ?? operation.primaryBuyoffRoles);
+  const [opSecondaryRoles, setOpSecondaryRoles] = useState<WorkRole[]>(cachedOp?.secondaryRoles ?? operation.secondaryBuyoffRoles);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [anyStepDirty, setAnyStepDirty] = useState(false);
   const stepRegistry = useRef(new Map<string, { dirty: boolean; save: () => void }>());
@@ -430,8 +478,10 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
   const opHeaderDirty = (opName.trim() !== '' && opName.trim() !== operation.name) ||
     (!isNaN(parsedSeq) && parsedSeq !== operation.sequence);
   const instructionsDirty = opInstructions !== (operation.instructions ?? '');
-  const roleDirty = opRole !== operation.primaryBuyoffRole || opSecondaryRole !== operation.secondaryBuyoffRole;
-  const opDirty = opHeaderDirty || instructionsDirty || roleDirty;
+  const rolesDirty =
+    opRoles.join(',') !== operation.primaryBuyoffRoles.join(',') ||
+    opSecondaryRoles.join(',') !== operation.secondaryBuyoffRoles.join(',');
+  const opDirty = opHeaderDirty || instructionsDirty || rolesDirty;
   const overallDirty = opDirty || anyStepDirty;
   const sortedSteps = [...operation.steps].sort((a, b) => a.order - b.order);
 
@@ -440,8 +490,8 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
       sequence: isNaN(parsedSeq) ? operation.sequence : parsedSeq,
       name: opName.trim(),
       instructions: opInstructions,
-      primaryBuyoffRole: opRole,
-      secondaryBuyoffRole: opSecondaryRole,
+      primaryBuyoffRoles: opRoles,
+      secondaryBuyoffRoles: opSecondaryRoles,
     }));
   }
 
@@ -460,9 +510,9 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
 
   // Keep the op edit cache in sync so remounts restore unsaved data.
   useEffect(() => {
-    opEditsRef.current.set(operation.id, { name: opName, seq: opSeq, instructions: opInstructions, role: opRole, secondaryRole: opSecondaryRole });
+    opEditsRef.current.set(operation.id, { name: opName, seq: opSeq, instructions: opInstructions, roles: opRoles, secondaryRoles: opSecondaryRoles });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opName, opSeq, opInstructions, opRole, opSecondaryRole]);
+  }, [opName, opSeq, opInstructions, opRoles, opSecondaryRoles]);
 
   function handleStepDirtyChange(stepId: string, dirty: boolean, save: () => void) {
     stepRegistry.current.set(stepId, { dirty, save });
@@ -503,9 +553,9 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
       {/* Op buyoff roles */}
       <div className="flex items-center gap-4 px-5 py-2.5 border-b hairline bg-ink-900/30 shrink-0">
         <span className="text-[10px] uppercase tracking-widest text-ink-400 shrink-0">Primary Buyoff</span>
-        <RoleSelect value={opRole} onChange={setOpRole} roles={workRoles} disabled={pending} />
+        <RoleMultiSelect value={opRoles} onChange={setOpRoles} roles={workRoles} disabled={pending} />
         <span className="text-[10px] uppercase tracking-widest text-ink-400 shrink-0">Secondary Buyoff</span>
-        <RoleSelect value={opSecondaryRole} onChange={setOpSecondaryRole} roles={workRoles} disabled={pending} />
+        <RoleMultiSelect value={opSecondaryRoles} onChange={setOpSecondaryRoles} roles={workRoles} disabled={pending} />
       </div>
 
       {/* Step cards (scrollable) */}
@@ -829,7 +879,7 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
   masterId: string; opId: string; step: Step; pending: boolean;
   run: (fn: () => Promise<unknown>, after?: (result: unknown) => void) => void;
   onDirtyChange: (stepId: string, dirty: boolean, save: () => void) => void;
-  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string; role: WorkRole | null; secondaryRole: WorkRole | null }>>;
+  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string; roles: WorkRole[]; secondaryRoles: WorkRole[] }>>;
   workRoles: WorkRoleOption[];
 }) {
   const router = useRouter();
@@ -838,22 +888,23 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
   const [title, setTitle] = useState(cachedStep?.title ?? step.title);
   const [body, setBody] = useState(cachedStep?.body ?? step.body);
   const [stepOrder, setStepOrder] = useState(cachedStep?.order ?? String(step.order));
-  const [role, setRole] = useState<WorkRole | null>(cachedStep?.role ?? step.primaryBuyoffRole);
-  const [secondaryRole, setSecondaryRole] = useState<WorkRole | null>(cachedStep?.secondaryRole ?? step.secondaryBuyoffRole);
+  const [roles, setRoles] = useState<WorkRole[]>(cachedStep?.roles ?? step.primaryBuyoffRoles);
+  const [secondaryRoles, setSecondaryRoles] = useState<WorkRole[]>(cachedStep?.secondaryRoles ?? step.secondaryBuyoffRoles);
   const [htmlMode, setHtmlMode] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const parsedOrder = parseInt(stepOrder, 10);
   const dirty = (title.trim() !== step.title && title.trim() !== '') || body !== step.body ||
     (!isNaN(parsedOrder) && parsedOrder !== step.order) ||
-    role !== step.primaryBuyoffRole || secondaryRole !== step.secondaryBuyoffRole;
+    roles.join(',') !== step.primaryBuyoffRoles.join(',') ||
+    secondaryRoles.join(',') !== step.secondaryBuyoffRoles.join(',');
 
   const saveRef = useRef<() => void>(() => {});
   saveRef.current = () => run(() => mastersApi.updateStep(masterId, opId, step.id, {
     order: isNaN(parsedOrder) ? step.order : parsedOrder,
     title: title.trim(),
     body,
-    primaryBuyoffRole: role,
-    secondaryBuyoffRole: secondaryRole,
+    primaryBuyoffRoles: roles,
+    secondaryBuyoffRoles: secondaryRoles,
   }));
   const stableSave = useCallback(() => saveRef.current(), []);
 
@@ -864,9 +915,9 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
 
   // Keep the step edit cache in sync so remounts restore unsaved data.
   useEffect(() => {
-    stepEditsRef.current.set(step.id, { title, body, order: stepOrder, role, secondaryRole });
+    stepEditsRef.current.set(step.id, { title, body, order: stepOrder, roles, secondaryRoles });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, body, stepOrder, role, secondaryRole]);
+  }, [title, body, stepOrder, roles, secondaryRoles]);
 
   function toggleHtmlMode() {
     setBody((prev) => (htmlMode ? htmlToText(prev) : textToHtml(prev)));
@@ -1010,9 +1061,9 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
       {!collapsed && (
         <div className="flex items-center gap-4 px-4 py-2.5 border-t hairline bg-ink-900/30">
           <span className="text-[10px] uppercase tracking-widest text-ink-400 shrink-0">Primary Buyoff</span>
-          <RoleSelect value={role} onChange={setRole} roles={workRoles} disabled={pending} />
+          <RoleMultiSelect value={roles} onChange={setRoles} roles={workRoles} disabled={pending} />
           <span className="text-[10px] uppercase tracking-widest text-ink-400 shrink-0">Secondary Buyoff</span>
-          <RoleSelect value={secondaryRole} onChange={setSecondaryRole} roles={workRoles} disabled={pending} />
+          <RoleMultiSelect value={secondaryRoles} onChange={setSecondaryRoles} roles={workRoles} disabled={pending} />
         </div>
       )}
     </div>

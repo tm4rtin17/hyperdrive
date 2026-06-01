@@ -139,8 +139,8 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateOperation(
         Guid id, Guid opId, UpdateOperationBody body, UpdateOperationHandler handler, CancellationToken ct)
     {
-        if (!TryParseRole(body.PrimaryBuyoffRole, out var primary, out var problem)) return problem!;
-        if (!TryParseRole(body.SecondaryBuyoffRole, out var secondary, out problem)) return problem!;
+        if (!TryParseRoles(body.PrimaryBuyoffRoles, out var primary, out var problem)) return problem!;
+        if (!TryParseRoles(body.SecondaryBuyoffRoles, out var secondary, out problem)) return problem!;
         var result = await handler.HandleAsync(new UpdateOperationCommand(id, opId, body.Sequence, body.Name, body.Instructions ?? string.Empty, primary, secondary), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
@@ -172,8 +172,8 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateStep(
         Guid id, Guid opId, Guid stepId, UpdateStepBody body, UpdateStepHandler handler, CancellationToken ct)
     {
-        if (!TryParseRole(body.PrimaryBuyoffRole, out var primary, out var problem)) return problem!;
-        if (!TryParseRole(body.SecondaryBuyoffRole, out var secondary, out problem)) return problem!;
+        if (!TryParseRoles(body.PrimaryBuyoffRoles, out var primary, out var problem)) return problem!;
+        if (!TryParseRoles(body.SecondaryBuyoffRoles, out var secondary, out problem)) return problem!;
         var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Order, body.Title, body.Body, primary, secondary), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
@@ -247,20 +247,25 @@ internal static class EngineeringMasterEndpoints
             : Results.File(a.Data, a.ContentType, a.FileName);
     }
 
-    // Parses an optional work-role name (enum string). Empty/null → unassigned (null).
-    // Returns false with a 400 problem when a non-empty value isn't a known role.
-    private static bool TryParseRole(string? value, out WorkRole? role, out IResult? problem)
+    // Parses a list of work-role names. Null/empty list → empty array (unassigned).
+    // Returns false with a 400 problem if any value isn't a known role.
+    private static bool TryParseRoles(IReadOnlyList<string>? values, out WorkRole[] roles, out IResult? problem)
     {
-        role = null;
+        roles = [];
         problem = null;
-        if (string.IsNullOrWhiteSpace(value)) return true;
-        if (Enum.TryParse<WorkRole>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+        if (values is null || values.Count == 0) return true;
+        var result = new List<WorkRole>(values.Count);
+        foreach (var value in values)
         {
-            role = parsed;
-            return true;
+            if (!Enum.TryParse<WorkRole>(value, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+            {
+                problem = TypedResults.Problem(detail: $"Unknown work role '{value}'.", statusCode: 400, title: "role.invalid");
+                return false;
+            }
+            result.Add(parsed);
         }
-        problem = TypedResults.Problem(detail: $"Unknown work role '{value}'.", statusCode: 400, title: "role.invalid");
-        return false;
+        roles = result.ToArray();
+        return true;
     }
 
     private static ProblemHttpResult ToProblem(DomainError error) => error.Type switch
@@ -276,8 +281,8 @@ internal sealed record CreateMasterBody(string PartNumber, Guid? PartId, string?
 internal sealed record UpdateMasterHeaderBody(
     string PartNumber, string? Revision, string? Description, string? Changelog, IReadOnlyList<string>? Approvers);
 internal sealed record AddOperationBody(string Name);
-internal sealed record UpdateOperationBody(int Sequence, string Name, string Instructions, string? PrimaryBuyoffRole, string? SecondaryBuyoffRole);
+internal sealed record UpdateOperationBody(int Sequence, string Name, string Instructions, IReadOnlyList<string>? PrimaryBuyoffRoles, IReadOnlyList<string>? SecondaryBuyoffRoles);
 internal sealed record OperationLinkBody(Guid PredecessorId, Guid SuccessorId);
 internal sealed record UpdateSequenceBody(IReadOnlyList<OperationLinkBody> Links);
 internal sealed record AddStepBody(string Title);
-internal sealed record UpdateStepBody(int Order, string Title, string Body, string? PrimaryBuyoffRole, string? SecondaryBuyoffRole);
+internal sealed record UpdateStepBody(int Order, string Title, string Body, IReadOnlyList<string>? PrimaryBuyoffRoles, IReadOnlyList<string>? SecondaryBuyoffRoles);

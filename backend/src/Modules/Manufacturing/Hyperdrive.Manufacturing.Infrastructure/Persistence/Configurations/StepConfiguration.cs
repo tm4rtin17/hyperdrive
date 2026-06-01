@@ -19,7 +19,17 @@ internal sealed class StepConfiguration : IEntityTypeConfiguration<OperationStep
         builder.Property(s => s.Order).HasColumnName("step_order").IsRequired();
         builder.Property(s => s.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
         builder.Property(s => s.Body).HasColumnName("body").IsRequired();
-        builder.Property(s => s.PrimaryBuyoffRole).HasColumnName("primary_buyoff_role");
-        builder.Property(s => s.SecondaryBuyoffRole).HasColumnName("secondary_buyoff_role");
+        builder.Property(s => s.PrimaryBuyoffRoles)
+            .HasColumnName("primary_buyoff_roles")
+            .HasColumnType("integer[]")
+            .HasConversion(
+                v => v.Select(r => (int)r).ToArray(),
+                v => v.Select(r => (WorkRole)r).ToArray());
+        builder.Property(s => s.SecondaryBuyoffRoles)
+            .HasColumnName("secondary_buyoff_roles")
+            .HasColumnType("integer[]")
+            .HasConversion(
+                v => v.Select(r => (int)r).ToArray(),
+                v => v.Select(r => (WorkRole)r).ToArray());
     }
 }

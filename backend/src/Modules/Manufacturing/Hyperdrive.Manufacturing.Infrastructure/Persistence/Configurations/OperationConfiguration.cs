@@ -18,8 +18,18 @@ internal sealed class OperationConfiguration : IEntityTypeConfiguration<Operatio
         builder.Property(o => o.Sequence).HasColumnName("sequence").IsRequired();
         builder.Property(o => o.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(o => o.Instructions).HasColumnName("instructions").HasDefaultValue(string.Empty).IsRequired();
-        builder.Property(o => o.PrimaryBuyoffRole).HasColumnName("primary_buyoff_role");
-        builder.Property(o => o.SecondaryBuyoffRole).HasColumnName("secondary_buyoff_role");
+        builder.Property(o => o.PrimaryBuyoffRoles)
+            .HasColumnName("primary_buyoff_roles")
+            .HasColumnType("integer[]")
+            .HasConversion(
+                v => v.Select(r => (int)r).ToArray(),
+                v => v.Select(r => (WorkRole)r).ToArray());
+        builder.Property(o => o.SecondaryBuyoffRoles)
+            .HasColumnName("secondary_buyoff_roles")
+            .HasColumnType("integer[]")
+            .HasConversion(
+                v => v.Select(r => (int)r).ToArray(),
+                v => v.Select(r => (WorkRole)r).ToArray());
 
         builder.HasIndex("master_id", nameof(Operation.Sequence));
 
