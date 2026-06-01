@@ -382,30 +382,26 @@ function OpTile({ op, selected, onClick }: { op: Operation; selected: boolean; o
 
 // ── Primary-buyoff role selector ───────────────────────────────────────────────
 
-function RoleSelect({ value, onChange, roles, disabled, className, label }: {
+function RoleSelect({ value, onChange, roles, disabled }: {
   value: WorkRole | null;
   onChange: (v: WorkRole | null) => void;
   roles: WorkRoleOption[];
   disabled?: boolean;
-  className?: string;
-  label?: string;
 }) {
   return (
-    <label className={`inline-flex items-center gap-1.5 ${className ?? ''}`} title="Primary buyoff role">
-      {label && <span className="text-[10px] uppercase tracking-widest text-ink-500 shrink-0">{label}</span>}
-      <select
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value === '' ? null : (e.target.value as WorkRole))}
-        disabled={disabled}
-        className={`h-full bg-ink-950 border hairline rounded-sm px-2 text-xs focus:outline-none focus:border-accent disabled:opacity-50 ${
-          value ? 'text-ink-100' : 'text-ink-500'
-        }`}>
-        <option value="">No role</option>
-        {roles.map((r) => (
-          <option key={r.value} value={r.value} className="text-ink-100">{r.label}</option>
-        ))}
-      </select>
-    </label>
+    <select
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value === '' ? null : (e.target.value as WorkRole))}
+      disabled={disabled}
+      title="Primary buyoff role"
+      className={`h-8 bg-ink-950 border hairline rounded-sm px-2 text-xs focus:outline-none focus:border-accent disabled:opacity-50 ${
+        value ? 'text-ink-100' : 'text-ink-500'
+      }`}>
+      <option value="">Unassigned</option>
+      {roles.map((r) => (
+        <option key={r.value} value={r.value} className="text-ink-100">{r.label}</option>
+      ))}
+    </select>
   );
 }
 
@@ -483,13 +479,6 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
           className="w-16 h-9 bg-ink-950 border hairline rounded-sm px-2 text-sm font-mono text-ink-100 focus:outline-none focus:border-accent text-center shrink-0" />
         <input value={opName} onChange={(e) => setOpName(e.target.value)}
           className="flex-1 h-9 bg-ink-950 border hairline rounded-sm px-3 text-base text-ink-100 focus:outline-none focus:border-accent" />
-        <RoleSelect
-          value={opRole}
-          onChange={setOpRole}
-          roles={workRoles}
-          disabled={pending}
-          className="h-9 shrink-0"
-          label="Buyoff" />
         <button
           onClick={() => { if (window.confirm(`Remove "${operation.name}" and all its steps?`)) run(() => mastersApi.removeOperation(masterId, operation.id), onRemoved); }}
           disabled={pending}
@@ -508,6 +497,16 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
         pending={pending}
         onAttachmentChange={() => run(() => Promise.resolve())}
       />
+
+      {/* Op buyoff role */}
+      <div className="flex items-center gap-3 px-5 py-2.5 border-b hairline bg-ink-900/30 shrink-0">
+        <span className="text-[10px] uppercase tracking-widest text-ink-400 shrink-0">Primary Buyoff</span>
+        <RoleSelect
+          value={opRole}
+          onChange={setOpRole}
+          roles={workRoles}
+          disabled={pending} />
+      </div>
 
       {/* Step cards (scrollable) */}
       <div className="flex-1 overflow-y-auto">
@@ -926,13 +925,6 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
         <input value={title} onChange={(e) => setTitle(e.target.value)}
           placeholder="Step title…"
           className="flex-1 h-8 bg-ink-950 border hairline rounded-sm px-2 text-sm text-ink-100 focus:outline-none focus:border-accent" />
-        <RoleSelect
-          value={role}
-          onChange={setRole}
-          roles={workRoles}
-          disabled={pending}
-          className="h-8 shrink-0"
-          label="Buyoff" />
         <button
           onClick={() => run(() => mastersApi.removeStep(masterId, opId, step.id))}
           disabled={pending}
@@ -1010,6 +1002,18 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
           onDeleted={() => run(() => Promise.resolve())}
         />
       </div>}
+
+      {/* Buyoff role */}
+      {!collapsed && (
+        <div className="flex items-center gap-3 px-4 py-2.5 border-t hairline bg-ink-900/30">
+          <span className="text-[10px] uppercase tracking-widest text-ink-400 shrink-0">Primary Buyoff</span>
+          <RoleSelect
+            value={role}
+            onChange={setRole}
+            roles={workRoles}
+            disabled={pending} />
+        </div>
+      )}
     </div>
   );
 }
