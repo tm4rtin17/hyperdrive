@@ -20,5 +20,6 @@ internal sealed class StepConfiguration : IEntityTypeConfiguration<OperationStep
         builder.Property(s => s.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
         builder.Property(s => s.Body).HasColumnName("body").IsRequired();
         builder.Property(s => s.PrimaryBuyoffRole).HasColumnName("primary_buyoff_role");
+        builder.Property(s => s.SecondaryBuyoffRole).HasColumnName("secondary_buyoff_role");
     }
 }

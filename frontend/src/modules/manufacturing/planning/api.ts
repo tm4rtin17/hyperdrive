@@ -30,6 +30,7 @@ export type Step = {
   title: string;
   body: string;
   primaryBuyoffRole: WorkRole | null;
+  secondaryBuyoffRole: WorkRole | null;
   attachments: StepAttachment[];
 };
 
@@ -47,6 +48,7 @@ export type Operation = {
   name: string;
   instructions: string;
   primaryBuyoffRole: WorkRole | null;
+  secondaryBuyoffRole: WorkRole | null;
   attachments: OperationAttachment[];
   steps: Step[];
 };
@@ -143,7 +145,7 @@ export const mastersApi = {
   addOperation: (id: string, name: string) =>
     api<Operation>(`${base}/${id}/operations`, { method: 'POST', body: { name } }),
 
-  updateOperation: (id: string, opId: string, input: { sequence: number; name: string; instructions: string; primaryBuyoffRole: WorkRole | null }) =>
+  updateOperation: (id: string, opId: string, input: { sequence: number; name: string; instructions: string; primaryBuyoffRole: WorkRole | null; secondaryBuyoffRole: WorkRole | null }) =>
     api<void>(`${base}/${id}/operations/${opId}`, { method: 'PUT', body: input }),
 
   removeOperation: (id: string, opId: string) =>
@@ -172,7 +174,7 @@ export const mastersApi = {
   addStep: (id: string, opId: string, title: string) =>
     api<Step>(`${base}/${id}/operations/${opId}/steps`, { method: 'POST', body: { title } }),
 
-  updateStep: (id: string, opId: string, stepId: string, input: { order: number; title: string; body: string; primaryBuyoffRole: WorkRole | null }) =>
+  updateStep: (id: string, opId: string, stepId: string, input: { order: number; title: string; body: string; primaryBuyoffRole: WorkRole | null; secondaryBuyoffRole: WorkRole | null }) =>
     api<void>(`${stepBase(id, opId, stepId)}`, { method: 'PUT', body: input }),
 
   removeStep: (id: string, opId: string, stepId: string) =>

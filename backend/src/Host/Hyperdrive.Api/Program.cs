@@ -108,9 +108,11 @@ if (app.Environment.IsDevelopment())
             ON manufacturing.master_attachments (master_id);
 
         ALTER TABLE manufacturing.operations
-            ADD COLUMN IF NOT EXISTS primary_buyoff_role integer NULL;
+            ADD COLUMN IF NOT EXISTS primary_buyoff_role integer NULL,
+            ADD COLUMN IF NOT EXISTS secondary_buyoff_role integer NULL;
         ALTER TABLE manufacturing.steps
-            ADD COLUMN IF NOT EXISTS primary_buyoff_role integer NULL;
+            ADD COLUMN IF NOT EXISTS primary_buyoff_role integer NULL,
+            ADD COLUMN IF NOT EXISTS secondary_buyoff_role integer NULL;
         """);
 }
 

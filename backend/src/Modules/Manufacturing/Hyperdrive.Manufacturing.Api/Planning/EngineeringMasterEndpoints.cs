@@ -139,8 +139,9 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateOperation(
         Guid id, Guid opId, UpdateOperationBody body, UpdateOperationHandler handler, CancellationToken ct)
     {
-        if (!TryParseRole(body.PrimaryBuyoffRole, out var role, out var problem)) return problem!;
-        var result = await handler.HandleAsync(new UpdateOperationCommand(id, opId, body.Sequence, body.Name, body.Instructions ?? string.Empty, role), ct);
+        if (!TryParseRole(body.PrimaryBuyoffRole, out var primary, out var problem)) return problem!;
+        if (!TryParseRole(body.SecondaryBuyoffRole, out var secondary, out problem)) return problem!;
+        var result = await handler.HandleAsync(new UpdateOperationCommand(id, opId, body.Sequence, body.Name, body.Instructions ?? string.Empty, primary, secondary), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
@@ -171,8 +172,9 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateStep(
         Guid id, Guid opId, Guid stepId, UpdateStepBody body, UpdateStepHandler handler, CancellationToken ct)
     {
-        if (!TryParseRole(body.PrimaryBuyoffRole, out var role, out var problem)) return problem!;
-        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Order, body.Title, body.Body, role), ct);
+        if (!TryParseRole(body.PrimaryBuyoffRole, out var primary, out var problem)) return problem!;
+        if (!TryParseRole(body.SecondaryBuyoffRole, out var secondary, out problem)) return problem!;
+        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Order, body.Title, body.Body, primary, secondary), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
@@ -274,8 +276,8 @@ internal sealed record CreateMasterBody(string PartNumber, Guid? PartId, string?
 internal sealed record UpdateMasterHeaderBody(
     string PartNumber, string? Revision, string? Description, string? Changelog, IReadOnlyList<string>? Approvers);
 internal sealed record AddOperationBody(string Name);
-internal sealed record UpdateOperationBody(int Sequence, string Name, string Instructions, string? PrimaryBuyoffRole);
+internal sealed record UpdateOperationBody(int Sequence, string Name, string Instructions, string? PrimaryBuyoffRole, string? SecondaryBuyoffRole);
 internal sealed record OperationLinkBody(Guid PredecessorId, Guid SuccessorId);
 internal sealed record UpdateSequenceBody(IReadOnlyList<OperationLinkBody> Links);
 internal sealed record AddStepBody(string Title);
-internal sealed record UpdateStepBody(int Order, string Title, string Body, string? PrimaryBuyoffRole);
+internal sealed record UpdateStepBody(int Order, string Title, string Body, string? PrimaryBuyoffRole, string? SecondaryBuyoffRole);

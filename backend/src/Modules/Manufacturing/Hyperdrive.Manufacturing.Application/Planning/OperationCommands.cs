@@ -5,7 +5,7 @@ using Hyperdrive.SharedKernel.Results;
 namespace Hyperdrive.Manufacturing.Application.Planning;
 
 public sealed record AddOperationCommand(Guid MasterId, string Name);
-public sealed record UpdateOperationCommand(Guid MasterId, Guid OperationId, int Sequence, string Name, string Instructions, WorkRole? PrimaryBuyoffRole);
+public sealed record UpdateOperationCommand(Guid MasterId, Guid OperationId, int Sequence, string Name, string Instructions, WorkRole? PrimaryBuyoffRole, WorkRole? SecondaryBuyoffRole);
 public sealed record RemoveOperationCommand(Guid MasterId, Guid OperationId);
 
 public sealed class AddOperationHandler(IEngineeringMasterRepository repository, IUnitOfWork uow)
@@ -22,7 +22,7 @@ public sealed class AddOperationHandler(IEngineeringMasterRepository repository,
         await uow.SaveChangesAsync(ct);
 
         var op = result.Value!;
-        return new OperationDto(op.Id.Value, op.Sequence, op.Name, op.Instructions, op.PrimaryBuyoffRole?.ToString(), [], []);
+        return new OperationDto(op.Id.Value, op.Sequence, op.Name, op.Instructions, op.PrimaryBuyoffRole?.ToString(), op.SecondaryBuyoffRole?.ToString(), [], []);
     }
 }
 
@@ -34,7 +34,7 @@ public sealed class UpdateOperationHandler(IEngineeringMasterRepository reposito
         if (master is null)
             return DomainError.NotFound("master.not_found", $"Engineering master {cmd.MasterId} not found.");
 
-        var result = master.UpdateOperation(new OperationId(cmd.OperationId), cmd.Sequence, cmd.Name, cmd.Instructions, cmd.PrimaryBuyoffRole);
+        var result = master.UpdateOperation(new OperationId(cmd.OperationId), cmd.Sequence, cmd.Name, cmd.Instructions, cmd.PrimaryBuyoffRole, cmd.SecondaryBuyoffRole);
         if (result.IsFailure) return result;
 
         await uow.SaveChangesAsync(ct);

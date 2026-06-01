@@ -139,7 +139,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         return operation;
     }
 
-    public Result UpdateOperation(OperationId operationId, int sequence, string name, string instructions, WorkRole? primaryBuyoffRole)
+    public Result UpdateOperation(OperationId operationId, int sequence, string name, string instructions, WorkRole? primaryBuyoffRole, WorkRole? secondaryBuyoffRole)
     {
         if (string.IsNullOrWhiteSpace(name))
             return DomainError.Validation("operation.name.empty", "Operation name is required.");
@@ -148,7 +148,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         if (operation is null)
             return DomainError.NotFound("operation.not_found", $"Operation {operationId} not found.");
 
-        operation.Update(sequence, name, instructions, primaryBuyoffRole);
+        operation.Update(sequence, name, instructions, primaryBuyoffRole, secondaryBuyoffRole);
         return Result.Success();
     }
 
@@ -239,7 +239,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         return operation.AddStep(title);
     }
 
-    public Result UpdateStep(OperationId operationId, StepId stepId, int order, string title, string body, WorkRole? primaryBuyoffRole)
+    public Result UpdateStep(OperationId operationId, StepId stepId, int order, string title, string body, WorkRole? primaryBuyoffRole, WorkRole? secondaryBuyoffRole)
     {
         if (string.IsNullOrWhiteSpace(title))
             return DomainError.Validation("step.title.empty", "Step title is required.");
@@ -248,7 +248,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         if (operation is null)
             return DomainError.NotFound("operation.not_found", $"Operation {operationId} not found.");
 
-        return operation.UpdateStep(stepId, order, title, body, primaryBuyoffRole);
+        return operation.UpdateStep(stepId, order, title, body, primaryBuyoffRole, secondaryBuyoffRole);
     }
 
     public Result RemoveStep(OperationId operationId, StepId stepId)

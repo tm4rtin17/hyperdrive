@@ -29,6 +29,7 @@ public static class EngineeringMasterMapper
                 o.Name,
                 o.Instructions,
                 o.PrimaryBuyoffRole?.ToString(),
+                o.SecondaryBuyoffRole?.ToString(),
                 opAttachments?[o.Id.Value].ToList() ?? [],
                 o.Steps.OrderBy(s => s.Order)
                     .Select(s => new StepDto(
@@ -37,6 +38,7 @@ public static class EngineeringMasterMapper
                         s.Title,
                         s.Body,
                         s.PrimaryBuyoffRole?.ToString(),
+                        s.SecondaryBuyoffRole?.ToString(),
                         stepAttachments?[s.Id.Value].ToList() ?? []))
                     .ToList()))
             .ToList(),

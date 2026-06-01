@@ -18,6 +18,9 @@ public sealed class Operation : Entity<OperationId>
     /// <summary>Role responsible for the primary buyoff of this operation. Null until assigned.</summary>
     public WorkRole? PrimaryBuyoffRole { get; private set; }
 
+    /// <summary>Optional second-party witness/co-signoff role. Null until assigned.</summary>
+    public WorkRole? SecondaryBuyoffRole { get; private set; }
+
     public IReadOnlyCollection<OperationStep> Steps => _steps;
 
     // EF
@@ -30,12 +33,13 @@ public sealed class Operation : Entity<OperationId>
         Name = name.Trim();
     }
 
-    internal void Update(int sequence, string name, string instructions, WorkRole? primaryBuyoffRole)
+    internal void Update(int sequence, string name, string instructions, WorkRole? primaryBuyoffRole, WorkRole? secondaryBuyoffRole)
     {
         Sequence = sequence;
         Name = name.Trim();
         Instructions = instructions ?? string.Empty;
         PrimaryBuyoffRole = primaryBuyoffRole;
+        SecondaryBuyoffRole = secondaryBuyoffRole;
     }
 
     internal OperationStep AddStep(string title)
@@ -46,13 +50,13 @@ public sealed class Operation : Entity<OperationId>
         return step;
     }
 
-    internal Result UpdateStep(StepId stepId, int order, string title, string body, WorkRole? primaryBuyoffRole)
+    internal Result UpdateStep(StepId stepId, int order, string title, string body, WorkRole? primaryBuyoffRole, WorkRole? secondaryBuyoffRole)
     {
         var step = _steps.FirstOrDefault(s => s.Id == stepId);
         if (step is null)
             return DomainError.NotFound("step.not_found", $"Step {stepId} not found.");
         step.SetOrder(order);
-        step.Update(title, body, primaryBuyoffRole);
+        step.Update(title, body, primaryBuyoffRole, secondaryBuyoffRole);
         return Result.Success();
     }
 
