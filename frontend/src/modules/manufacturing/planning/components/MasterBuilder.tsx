@@ -9,6 +9,8 @@ import {
   type OperationAttachment,
   type Step,
   type StepAttachment,
+  type WorkRole,
+  type WorkRoleOption,
 } from '@/modules/manufacturing/planning/api';
 import { ApiError } from '@/shared/lib/api/client';
 import { SequenceEditor } from '@/modules/manufacturing/planning/components/SequenceEditor';
@@ -37,8 +39,14 @@ export function MasterBuilder({ master }: { master: EngineeringMaster }) {
   opsDirtyRef.current = opsDirty;
 
   // Persist unsaved edits across component remounts (e.g. router.refresh() RSC reconciliation).
-  const stepEditsRef = useRef(new Map<string, { title: string; body: string | null; order: string }>());
-  const opEditsRef = useRef(new Map<string, { name: string; seq: string; instructions: string }>());
+  const stepEditsRef = useRef(new Map<string, { title: string; body: string | null; order: string; role: WorkRole | null }>());
+  const opEditsRef = useRef(new Map<string, { name: string; seq: string; instructions: string; role: WorkRole | null }>());
+
+  // Selectable buyoff roles — fetched once from the reference-data endpoint.
+  const [workRoles, setWorkRoles] = useState<WorkRoleOption[]>([]);
+  useEffect(() => {
+    mastersApi.listWorkRoles().then(setWorkRoles).catch(() => { /* non-fatal: selector falls back to empty */ });
+  }, []);
 
   // Guard state: null = no dialog, otherwise stores the action to run after confirmation.
   const [guardIntent, setGuardIntent] = useState<{ proceed: () => void } | null>(null);
@@ -271,6 +279,7 @@ export function MasterBuilder({ master }: { master: EngineeringMaster }) {
               <StepsPanel
                 masterId={master.id} operation={op}
                 pending={pending} run={run}
+                workRoles={workRoles}
                 stepEditsRef={stepEditsRef}
                 opEditsRef={opEditsRef}
                 onRemoved={() => setSelectedOpId(sortedOps.find((o) => o.id !== op.id)?.id ?? null)}
@@ -371,20 +380,51 @@ function OpTile({ op, selected, onClick }: { op: Operation; selected: boolean; o
   );
 }
 
+// ── Primary-buyoff role selector ───────────────────────────────────────────────
+
+function RoleSelect({ value, onChange, roles, disabled, className, label }: {
+  value: WorkRole | null;
+  onChange: (v: WorkRole | null) => void;
+  roles: WorkRoleOption[];
+  disabled?: boolean;
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <label className={`inline-flex items-center gap-1.5 ${className ?? ''}`} title="Primary buyoff role">
+      {label && <span className="text-[10px] uppercase tracking-widest text-ink-500 shrink-0">{label}</span>}
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value === '' ? null : (e.target.value as WorkRole))}
+        disabled={disabled}
+        className={`h-full bg-ink-950 border hairline rounded-sm px-2 text-xs focus:outline-none focus:border-accent disabled:opacity-50 ${
+          value ? 'text-ink-100' : 'text-ink-500'
+        }`}>
+        <option value="">No role</option>
+        {roles.map((r) => (
+          <option key={r.value} value={r.value} className="text-ink-100">{r.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 // ── Steps panel ──────────────────────────────────────────────────────────────
 
-function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChange, stepEditsRef, opEditsRef }: {
+function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChange, stepEditsRef, opEditsRef, workRoles }: {
   masterId: string; operation: Operation; pending: boolean;
   run: (fn: () => Promise<unknown>, after?: (result: unknown) => void) => void;
   onRemoved: () => void;
   onDirtyChange: (dirty: boolean, save: () => void) => void;
-  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string }>>;
-  opEditsRef: React.MutableRefObject<Map<string, { name: string; seq: string; instructions: string }>>;
+  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string; role: WorkRole | null }>>;
+  opEditsRef: React.MutableRefObject<Map<string, { name: string; seq: string; instructions: string; role: WorkRole | null }>>;
+  workRoles: WorkRoleOption[];
 }) {
   const cachedOp = opEditsRef.current.get(operation.id);
   const [opName, setOpName] = useState(cachedOp?.name ?? operation.name);
   const [opSeq, setOpSeq] = useState(cachedOp?.seq ?? String(operation.sequence));
   const [opInstructions, setOpInstructions] = useState(cachedOp?.instructions ?? (operation.instructions ?? ''));
+  const [opRole, setOpRole] = useState<WorkRole | null>(cachedOp?.role ?? operation.primaryBuyoffRole);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [anyStepDirty, setAnyStepDirty] = useState(false);
   const stepRegistry = useRef(new Map<string, { dirty: boolean; save: () => void }>());
@@ -393,7 +433,8 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
   const opHeaderDirty = (opName.trim() !== '' && opName.trim() !== operation.name) ||
     (!isNaN(parsedSeq) && parsedSeq !== operation.sequence);
   const instructionsDirty = opInstructions !== (operation.instructions ?? '');
-  const opDirty = opHeaderDirty || instructionsDirty;
+  const roleDirty = opRole !== operation.primaryBuyoffRole;
+  const opDirty = opHeaderDirty || instructionsDirty || roleDirty;
   const overallDirty = opDirty || anyStepDirty;
   const sortedSteps = [...operation.steps].sort((a, b) => a.order - b.order);
 
@@ -402,6 +443,7 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
       sequence: isNaN(parsedSeq) ? operation.sequence : parsedSeq,
       name: opName.trim(),
       instructions: opInstructions,
+      primaryBuyoffRole: opRole,
     }));
   }
 
@@ -420,9 +462,9 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
 
   // Keep the op edit cache in sync so remounts restore unsaved data.
   useEffect(() => {
-    opEditsRef.current.set(operation.id, { name: opName, seq: opSeq, instructions: opInstructions });
+    opEditsRef.current.set(operation.id, { name: opName, seq: opSeq, instructions: opInstructions, role: opRole });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opName, opSeq, opInstructions]);
+  }, [opName, opSeq, opInstructions, opRole]);
 
   function handleStepDirtyChange(stepId: string, dirty: boolean, save: () => void) {
     stepRegistry.current.set(stepId, { dirty, save });
@@ -441,6 +483,13 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
           className="w-16 h-9 bg-ink-950 border hairline rounded-sm px-2 text-sm font-mono text-ink-100 focus:outline-none focus:border-accent text-center shrink-0" />
         <input value={opName} onChange={(e) => setOpName(e.target.value)}
           className="flex-1 h-9 bg-ink-950 border hairline rounded-sm px-3 text-base text-ink-100 focus:outline-none focus:border-accent" />
+        <RoleSelect
+          value={opRole}
+          onChange={setOpRole}
+          roles={workRoles}
+          disabled={pending}
+          className="h-9 shrink-0"
+          label="Buyoff" />
         <button
           onClick={() => { if (window.confirm(`Remove "${operation.name}" and all its steps?`)) run(() => mastersApi.removeOperation(masterId, operation.id), onRemoved); }}
           disabled={pending}
@@ -472,6 +521,7 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChang
               <StepCard
                 key={step.id} masterId={masterId} opId={operation.id} step={step}
                 pending={pending} run={run}
+                workRoles={workRoles}
                 stepEditsRef={stepEditsRef}
                 onDirtyChange={handleStepDirtyChange}
               />
@@ -776,11 +826,12 @@ function OpAttachmentsPanel({ masterId, opId, attachments, pending, onUploaded, 
 
 // ── Step card ─────────────────────────────────────────────────────────────────
 
-function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEditsRef }: {
+function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEditsRef, workRoles }: {
   masterId: string; opId: string; step: Step; pending: boolean;
   run: (fn: () => Promise<unknown>, after?: (result: unknown) => void) => void;
   onDirtyChange: (stepId: string, dirty: boolean, save: () => void) => void;
-  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string }>>;
+  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string; role: WorkRole | null }>>;
+  workRoles: WorkRoleOption[];
 }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -788,17 +839,19 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
   const [title, setTitle] = useState(cachedStep?.title ?? step.title);
   const [body, setBody] = useState(cachedStep?.body ?? step.body);
   const [stepOrder, setStepOrder] = useState(cachedStep?.order ?? String(step.order));
+  const [role, setRole] = useState<WorkRole | null>(cachedStep?.role ?? step.primaryBuyoffRole);
   const [htmlMode, setHtmlMode] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const parsedOrder = parseInt(stepOrder, 10);
   const dirty = (title.trim() !== step.title && title.trim() !== '') || body !== step.body ||
-    (!isNaN(parsedOrder) && parsedOrder !== step.order);
+    (!isNaN(parsedOrder) && parsedOrder !== step.order) || role !== step.primaryBuyoffRole;
 
   const saveRef = useRef<() => void>(() => {});
   saveRef.current = () => run(() => mastersApi.updateStep(masterId, opId, step.id, {
     order: isNaN(parsedOrder) ? step.order : parsedOrder,
     title: title.trim(),
     body,
+    primaryBuyoffRole: role,
   }));
   const stableSave = useCallback(() => saveRef.current(), []);
 
@@ -809,9 +862,9 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
 
   // Keep the step edit cache in sync so remounts restore unsaved data.
   useEffect(() => {
-    stepEditsRef.current.set(step.id, { title, body, order: stepOrder });
+    stepEditsRef.current.set(step.id, { title, body, order: stepOrder, role });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, body, stepOrder]);
+  }, [title, body, stepOrder, role]);
 
   function toggleHtmlMode() {
     setBody((prev) => (htmlMode ? htmlToText(prev) : textToHtml(prev)));
@@ -873,6 +926,13 @@ function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEdits
         <input value={title} onChange={(e) => setTitle(e.target.value)}
           placeholder="Step title…"
           className="flex-1 h-8 bg-ink-950 border hairline rounded-sm px-2 text-sm text-ink-100 focus:outline-none focus:border-accent" />
+        <RoleSelect
+          value={role}
+          onChange={setRole}
+          roles={workRoles}
+          disabled={pending}
+          className="h-8 shrink-0"
+          label="Buyoff" />
         <button
           onClick={() => run(() => mastersApi.removeStep(masterId, opId, step.id))}
           disabled={pending}

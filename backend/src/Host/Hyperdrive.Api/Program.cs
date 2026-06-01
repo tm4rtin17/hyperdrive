@@ -88,6 +88,29 @@ if (app.Environment.IsDevelopment())
         );
         CREATE INDEX IF NOT EXISTS ix_operation_attachments_operation_id
             ON manufacturing.operation_attachments (operation_id);
+
+        ALTER TABLE manufacturing.engineering_masters
+            ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '',
+            ADD COLUMN IF NOT EXISTS changelog text NOT NULL DEFAULT '',
+            ADD COLUMN IF NOT EXISTS approvers text[] NOT NULL DEFAULT '{{}}',
+            ADD COLUMN IF NOT EXISTS revision varchar(3) NOT NULL DEFAULT 'A';
+
+        CREATE TABLE IF NOT EXISTS manufacturing.master_attachments (
+            id uuid PRIMARY KEY,
+            master_id uuid NOT NULL REFERENCES manufacturing.engineering_masters(id) ON DELETE CASCADE,
+            file_name varchar(256) NOT NULL,
+            content_type varchar(128) NOT NULL,
+            file_size bigint NOT NULL,
+            uploaded_at timestamptz NOT NULL,
+            data bytea NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_master_attachments_master_id
+            ON manufacturing.master_attachments (master_id);
+
+        ALTER TABLE manufacturing.operations
+            ADD COLUMN IF NOT EXISTS primary_buyoff_role integer NULL;
+        ALTER TABLE manufacturing.steps
+            ADD COLUMN IF NOT EXISTS primary_buyoff_role integer NULL;
         """);
 }
 

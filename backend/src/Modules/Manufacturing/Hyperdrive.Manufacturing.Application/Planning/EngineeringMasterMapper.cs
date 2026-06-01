@@ -8,13 +8,19 @@ public static class EngineeringMasterMapper
     public static EngineeringMasterDto ToDto(
         this EngineeringMaster m,
         ILookup<Guid, StepAttachmentDto>? stepAttachments = null,
-        ILookup<Guid, OperationAttachmentDto>? opAttachments = null) => new(
+        ILookup<Guid, OperationAttachmentDto>? opAttachments = null,
+        IReadOnlyList<MasterAttachmentDto>? masterAttachments = null) => new(
         m.Id.Value,
         m.PartNumber,
+        m.Revision,
         m.PartId,
         m.PartName,
         m.Status.ToString(),
         m.CreatedAt,
+        m.Description,
+        m.Changelog,
+        m.Approvers.ToList(),
+        masterAttachments ?? [],
         m.Operations
             .OrderBy(o => o.Sequence)
             .Select(o => new OperationDto(
@@ -22,6 +28,7 @@ public static class EngineeringMasterMapper
                 o.Sequence,
                 o.Name,
                 o.Instructions,
+                o.PrimaryBuyoffRole?.ToString(),
                 opAttachments?[o.Id.Value].ToList() ?? [],
                 o.Steps.OrderBy(s => s.Order)
                     .Select(s => new StepDto(
@@ -29,6 +36,7 @@ public static class EngineeringMasterMapper
                         s.Order,
                         s.Title,
                         s.Body,
+                        s.PrimaryBuyoffRole?.ToString(),
                         stepAttachments?[s.Id.Value].ToList() ?? []))
                     .ToList()))
             .ToList(),

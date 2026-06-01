@@ -16,6 +16,9 @@ public static class ManufacturingModule
         services.AddManufacturingInfrastructure(connectionString);
 
         services.AddScoped<CreateEngineeringMasterHandler>();
+        services.AddScoped<UpdateMasterHeaderHandler>();
+        services.AddScoped<UploadMasterAttachmentHandler>();
+        services.AddScoped<DeleteMasterAttachmentHandler>();
         services.AddScoped<AddOperationHandler>();
         services.AddScoped<UpdateOperationHandler>();
         services.AddScoped<RemoveOperationHandler>();

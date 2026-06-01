@@ -12,6 +12,9 @@ public sealed class OperationStep : Entity<StepId>
     public string Title { get; private set; } = default!;
     public string Body { get; private set; } = default!;
 
+    /// <summary>Role responsible for the primary buyoff of this step. Null until assigned.</summary>
+    public WorkRole? PrimaryBuyoffRole { get; private set; }
+
     // EF
     private OperationStep() { }
 
@@ -23,10 +26,11 @@ public sealed class OperationStep : Entity<StepId>
         Body = string.Empty;
     }
 
-    internal void Update(string title, string body)
+    internal void Update(string title, string body, WorkRole? primaryBuyoffRole)
     {
         Title = title.Trim();
         Body = body.Trim();
+        PrimaryBuyoffRole = primaryBuyoffRole;
     }
 
     internal void SetOrder(int order) => Order = order;

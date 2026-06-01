@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IEngineeringMasterReader, EngineeringMasterReader>();
         services.AddScoped<IStepAttachmentRepository, StepAttachmentRepository>();
         services.AddScoped<IOperationAttachmentRepository, OperationAttachmentRepository>();
+        services.AddScoped<IMasterAttachmentRepository, MasterAttachmentRepository>();
 
         return services;
     }

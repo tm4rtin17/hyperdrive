@@ -18,6 +18,7 @@ internal sealed class OperationConfiguration : IEntityTypeConfiguration<Operatio
         builder.Property(o => o.Sequence).HasColumnName("sequence").IsRequired();
         builder.Property(o => o.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(o => o.Instructions).HasColumnName("instructions").HasDefaultValue(string.Empty).IsRequired();
+        builder.Property(o => o.PrimaryBuyoffRole).HasColumnName("primary_buyoff_role");
 
         builder.HasIndex("master_id", nameof(Operation.Sequence));
 

@@ -18,6 +18,7 @@ public sealed class ManufacturingDbContext(
     public DbSet<EngineeringMaster> EngineeringMasters => Set<EngineeringMaster>();
     public DbSet<StepAttachment> StepAttachments => Set<StepAttachment>();
     public DbSet<OperationAttachment> OperationAttachments => Set<OperationAttachment>();
+    public DbSet<MasterAttachment> MasterAttachments => Set<MasterAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,4 +1,5 @@
 using Hyperdrive.Manufacturing.Application.Planning;
+using Hyperdrive.Manufacturing.Domain.Planning;
 using Hyperdrive.SharedKernel.Results;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -11,11 +12,22 @@ internal static class EngineeringMasterEndpoints
 {
     public static RouteGroupBuilder MapEngineeringMasterEndpoints(this RouteGroupBuilder group)
     {
+        // Reference data: the fixed set of buyoff roles, exposed for selection in the UI.
+        group.MapGet("/work-roles", ListWorkRoles).WithName("ListWorkRoles").WithTags("Manufacturing.Planning");
+
         var masters = group.MapGroup("/engineering-masters").WithTags("Manufacturing.Planning");
 
         masters.MapGet("/", List).WithName("ListEngineeringMasters");
         masters.MapPost("/", Create).WithName("CreateEngineeringMaster");
         masters.MapGet("/{id:guid}", Get).WithName("GetEngineeringMaster");
+        masters.MapPut("/{id:guid}", UpdateHeader).WithName("UpdateEngineeringMasterHeader");
+
+        masters.MapPost("/{id:guid}/attachments",
+            UploadMasterAttachment).WithName("UploadMasterAttachment").DisableAntiforgery();
+        masters.MapDelete("/{id:guid}/attachments/{attachmentId:guid}",
+            DeleteMasterAttachment).WithName("DeleteMasterAttachment");
+        masters.MapGet("/{id:guid}/attachments/{attachmentId:guid}/file",
+            DownloadMasterAttachment).WithName("DownloadMasterAttachment");
 
         masters.MapPost("/{id:guid}/operations", AddOperation).WithName("AddOperation");
         masters.MapPut("/{id:guid}/operations/{opId:guid}", UpdateOperation).WithName("UpdateOperation");
@@ -45,6 +57,11 @@ internal static class EngineeringMasterEndpoints
         return group;
     }
 
+    private static Ok<IReadOnlyList<WorkRoleDto>> ListWorkRoles() =>
+        TypedResults.Ok((IReadOnlyList<WorkRoleDto>)WorkRoles.All
+            .Select(r => new WorkRoleDto(r.Role.ToString(), r.Label))
+            .ToList());
+
     private static async Task<Ok<IReadOnlyList<EngineeringMasterSummaryDto>>> List(
         string? search, int? limit, IEngineeringMasterReader reader, CancellationToken ct) =>
         TypedResults.Ok(await reader.ListAsync(search, limit ?? 50, ct));
@@ -54,6 +71,52 @@ internal static class EngineeringMasterEndpoints
     {
         var master = await reader.GetAsync(id, ct);
         return master is null ? TypedResults.NotFound() : TypedResults.Ok(master);
+    }
+
+    private static async Task<IResult> UpdateHeader(
+        Guid id, UpdateMasterHeaderBody body, UpdateMasterHeaderHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(
+            new UpdateMasterHeaderCommand(
+                id,
+                body.PartNumber,
+                body.Revision ?? "A",
+                body.Description ?? string.Empty,
+                body.Changelog ?? string.Empty,
+                body.Approvers ?? []),
+            ct);
+        return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> UploadMasterAttachment(
+        Guid id,
+        IFormFile file,
+        UploadMasterAttachmentHandler handler,
+        CancellationToken ct)
+    {
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var result = await handler.HandleAsync(
+            new UploadMasterAttachmentCommand(id, file.FileName, file.ContentType, ms.ToArray()), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> DeleteMasterAttachment(
+        Guid attachmentId, DeleteMasterAttachmentHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new DeleteMasterAttachmentCommand(attachmentId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
+    }
+
+    private static async Task<IResult> DownloadMasterAttachment(
+        Guid attachmentId,
+        Hyperdrive.Manufacturing.Domain.Planning.IMasterAttachmentRepository repo,
+        CancellationToken ct)
+    {
+        var a = await repo.GetAsync(new Hyperdrive.Manufacturing.Domain.Planning.MasterAttachmentId(attachmentId), ct);
+        return a is null
+            ? TypedResults.NotFound()
+            : Results.File(a.Data, a.ContentType, a.FileName);
     }
 
     private static async Task<IResult> Create(
@@ -76,7 +139,8 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateOperation(
         Guid id, Guid opId, UpdateOperationBody body, UpdateOperationHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new UpdateOperationCommand(id, opId, body.Sequence, body.Name, body.Instructions ?? string.Empty), ct);
+        if (!TryParseRole(body.PrimaryBuyoffRole, out var role, out var problem)) return problem!;
+        var result = await handler.HandleAsync(new UpdateOperationCommand(id, opId, body.Sequence, body.Name, body.Instructions ?? string.Empty, role), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
@@ -107,7 +171,8 @@ internal static class EngineeringMasterEndpoints
     private static async Task<IResult> UpdateStep(
         Guid id, Guid opId, Guid stepId, UpdateStepBody body, UpdateStepHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Order, body.Title, body.Body), ct);
+        if (!TryParseRole(body.PrimaryBuyoffRole, out var role, out var problem)) return problem!;
+        var result = await handler.HandleAsync(new UpdateStepCommand(id, opId, stepId, body.Order, body.Title, body.Body, role), ct);
         return result.IsSuccess ? TypedResults.NoContent() : ToProblem(result.Error);
     }
 
@@ -180,6 +245,22 @@ internal static class EngineeringMasterEndpoints
             : Results.File(a.Data, a.ContentType, a.FileName);
     }
 
+    // Parses an optional work-role name (enum string). Empty/null → unassigned (null).
+    // Returns false with a 400 problem when a non-empty value isn't a known role.
+    private static bool TryParseRole(string? value, out WorkRole? role, out IResult? problem)
+    {
+        role = null;
+        problem = null;
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        if (Enum.TryParse<WorkRole>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+        {
+            role = parsed;
+            return true;
+        }
+        problem = TypedResults.Problem(detail: $"Unknown work role '{value}'.", statusCode: 400, title: "role.invalid");
+        return false;
+    }
+
     private static ProblemHttpResult ToProblem(DomainError error) => error.Type switch
     {
         ErrorType.Validation => TypedResults.Problem(detail: error.Message, statusCode: 400, title: error.Code),
@@ -190,9 +271,11 @@ internal static class EngineeringMasterEndpoints
 }
 
 internal sealed record CreateMasterBody(string PartNumber, Guid? PartId, string? PartName);
+internal sealed record UpdateMasterHeaderBody(
+    string PartNumber, string? Revision, string? Description, string? Changelog, IReadOnlyList<string>? Approvers);
 internal sealed record AddOperationBody(string Name);
-internal sealed record UpdateOperationBody(int Sequence, string Name, string Instructions);
+internal sealed record UpdateOperationBody(int Sequence, string Name, string Instructions, string? PrimaryBuyoffRole);
 internal sealed record OperationLinkBody(Guid PredecessorId, Guid SuccessorId);
 internal sealed record UpdateSequenceBody(IReadOnlyList<OperationLinkBody> Links);
 internal sealed record AddStepBody(string Title);
-internal sealed record UpdateStepBody(int Order, string Title, string Body);
+internal sealed record UpdateStepBody(int Order, string Title, string Body, string? PrimaryBuyoffRole);

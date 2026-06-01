@@ -59,6 +59,12 @@ internal sealed class EngineeringMasterReader(ManufacturingDbContext db) : IEngi
             a => a.OperationId,
             a => new OperationAttachmentDto(a.Id.Value, a.FileName, a.ContentType, a.FileSize, a.UploadedAt));
 
-        return master.ToDto(stepAttachmentsByStep, opAttachmentsByOp);
+        // Header (master-level) attachment metadata — binary Data column excluded via projection.
+        var masterAttachments = await db.MasterAttachments.AsNoTracking()
+            .Where(a => a.MasterId == id)
+            .Select(a => new MasterAttachmentDto(a.Id.Value, a.FileName, a.ContentType, a.FileSize, a.UploadedAt))
+            .ToListAsync(ct);
+
+        return master.ToDto(stepAttachmentsByStep, opAttachmentsByOp, masterAttachments);
     }
 }

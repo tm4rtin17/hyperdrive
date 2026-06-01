@@ -15,14 +15,35 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
     private const int FirstSequence = 510;
     private const int SequenceStep = 10;
 
+    private const int MaxPartNumberLength = 64;
+    private static readonly System.Text.RegularExpressions.Regex RevisionPattern =
+        new("^[A-Z]{1,3}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     private readonly List<Operation> _operations = new();
     private readonly List<OperationLink> _dependencies = new();
+    private readonly List<string> _approvers = new();
 
     public string PartNumber { get; private set; } = default!;
     public Guid? PartId { get; private set; }
     public string? PartName { get; private set; }
     public EngineeringMasterStatus Status { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>
+    /// Letter-based revision designator (A–Z, then AA–ZZ, etc.).
+    /// Revisions within the same part number are interchangeable; non-interchangeable
+    /// changes require a part-number roll (e.g. -501 → -502).
+    /// </summary>
+    public string Revision { get; private set; } = "A";
+
+    /// <summary>Free-text notes / general information about the product. May contain HTML.</summary>
+    public string Description { get; private set; } = string.Empty;
+
+    /// <summary>Manually maintained revision history. May contain HTML.</summary>
+    public string Changelog { get; private set; } = string.Empty;
+
+    /// <summary>Names of people who must approve the master before release. Placeholder for a richer approval flow.</summary>
+    public IReadOnlyList<string> Approvers => _approvers;
 
     public IReadOnlyCollection<Operation> Operations => _operations;
 
@@ -46,10 +67,8 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
     public static Result<EngineeringMaster> Create(
         string partNumber, Guid? partId, string? partName, DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(partNumber))
-            return DomainError.Validation("master.part_number.empty", "Part number is required.");
-        if (partNumber.Length > 64)
-            return DomainError.Validation("master.part_number.too_long", "Part number must be ≤ 64 chars.");
+        var partNumberCheck = ValidatePartNumber(partNumber);
+        if (partNumberCheck.IsFailure) return partNumberCheck.Error;
 
         var master = new EngineeringMaster(
             EngineeringMasterId.New(),
@@ -62,6 +81,49 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         master._operations.Add(new Operation(FirstSequence, "New Operation"));
 
         return master;
+    }
+
+    /// <summary>
+    /// Updates the master "header": part number plus the free-text description, changelog and approver list.
+    /// The part number is free text and is not re-linked to an Engineering part here.
+    /// </summary>
+    public Result UpdateHeader(string partNumber, string revision, string description, string changelog, IEnumerable<string> approvers)
+    {
+        var partNumberCheck = ValidatePartNumber(partNumber);
+        if (partNumberCheck.IsFailure) return partNumberCheck;
+
+        var revisionCheck = ValidateRevision(revision);
+        if (revisionCheck.IsFailure) return revisionCheck;
+
+        PartNumber = partNumber.Trim();
+        Revision = revision.Trim().ToUpperInvariant();
+        Description = description ?? string.Empty;
+        Changelog = changelog ?? string.Empty;
+
+        _approvers.Clear();
+        _approvers.AddRange((approvers ?? [])
+            .Select(a => a?.Trim() ?? string.Empty)
+            .Where(a => a.Length > 0));
+
+        return Result.Success();
+    }
+
+    private static Result ValidatePartNumber(string partNumber)
+    {
+        if (string.IsNullOrWhiteSpace(partNumber))
+            return DomainError.Validation("master.part_number.empty", "Part number is required.");
+        if (partNumber.Trim().Length > MaxPartNumberLength)
+            return DomainError.Validation("master.part_number.too_long", $"Part number must be ≤ {MaxPartNumberLength} chars.");
+        return Result.Success();
+    }
+
+    private static Result ValidateRevision(string revision)
+    {
+        if (string.IsNullOrWhiteSpace(revision))
+            return DomainError.Validation("master.revision.empty", "Revision is required.");
+        if (!RevisionPattern.IsMatch(revision.Trim().ToUpperInvariant()))
+            return DomainError.Validation("master.revision.invalid", "Revision must be 1–3 uppercase letters (A–Z).");
+        return Result.Success();
     }
 
     // === Operations ===
@@ -77,7 +139,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         return operation;
     }
 
-    public Result UpdateOperation(OperationId operationId, int sequence, string name, string instructions)
+    public Result UpdateOperation(OperationId operationId, int sequence, string name, string instructions, WorkRole? primaryBuyoffRole)
     {
         if (string.IsNullOrWhiteSpace(name))
             return DomainError.Validation("operation.name.empty", "Operation name is required.");
@@ -86,7 +148,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         if (operation is null)
             return DomainError.NotFound("operation.not_found", $"Operation {operationId} not found.");
 
-        operation.Update(sequence, name, instructions);
+        operation.Update(sequence, name, instructions, primaryBuyoffRole);
         return Result.Success();
     }
 
@@ -177,7 +239,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         return operation.AddStep(title);
     }
 
-    public Result UpdateStep(OperationId operationId, StepId stepId, int order, string title, string body)
+    public Result UpdateStep(OperationId operationId, StepId stepId, int order, string title, string body, WorkRole? primaryBuyoffRole)
     {
         if (string.IsNullOrWhiteSpace(title))
             return DomainError.Validation("step.title.empty", "Step title is required.");
@@ -186,7 +248,7 @@ public sealed class EngineeringMaster : AggregateRoot<EngineeringMasterId>
         if (operation is null)
             return DomainError.NotFound("operation.not_found", $"Operation {operationId} not found.");
 
-        return operation.UpdateStep(stepId, order, title, body);
+        return operation.UpdateStep(stepId, order, title, body, primaryBuyoffRole);
     }
 
     public Result RemoveStep(OperationId operationId, StepId stepId)

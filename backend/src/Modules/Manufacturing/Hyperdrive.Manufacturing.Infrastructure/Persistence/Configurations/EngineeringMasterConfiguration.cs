@@ -16,6 +16,7 @@ internal sealed class EngineeringMasterConfiguration : IEntityTypeConfiguration<
             .HasColumnName("id");
 
         builder.Property(m => m.PartNumber).HasColumnName("part_number").HasMaxLength(64).IsRequired();
+        builder.Property(m => m.Revision).HasColumnName("revision").HasMaxLength(3).IsRequired().HasDefaultValue("A");
         builder.Property(m => m.PartId).HasColumnName("part_id");
         builder.Property(m => m.PartName).HasColumnName("part_name").HasMaxLength(200);
 
@@ -26,6 +27,16 @@ internal sealed class EngineeringMasterConfiguration : IEntityTypeConfiguration<
             .IsRequired();
 
         builder.Property(m => m.CreatedAt).HasColumnName("created_at").IsRequired();
+
+        builder.Property(m => m.Description).HasColumnName("description").IsRequired().HasDefaultValue(string.Empty);
+        builder.Property(m => m.Changelog).HasColumnName("changelog").IsRequired().HasDefaultValue(string.Empty);
+
+        // Approver names persisted as a Postgres text[] array. Placeholder for a richer approval flow.
+        builder.PrimitiveCollection(m => m.Approvers)
+            .HasColumnName("approvers")
+            .HasField("_approvers")
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .IsRequired();
 
         builder.HasIndex(m => m.PartNumber);
 
