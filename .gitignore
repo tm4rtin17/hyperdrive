@@ -20,3 +20,6 @@ out/
 .idea/
 *.swp
 .DS_Store
+
+# Project instructions
+CLAUDE.md
