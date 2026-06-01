@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   mastersApi,
@@ -13,18 +12,129 @@ import {
 } from '@/modules/manufacturing/planning/api';
 import { ApiError } from '@/shared/lib/api/client';
 import { SequenceEditor } from '@/modules/manufacturing/planning/components/SequenceEditor';
+import { HeaderEditor, type HeaderEditorHandle } from '@/modules/manufacturing/planning/components/HeaderEditor';
+import { textToHtml, htmlToText } from '@/modules/manufacturing/planning/components/RichTextEditor';
+
+type BuilderMode = 'header' | 'operations';
 
 export function MasterBuilder({ master }: { master: EngineeringMaster }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [mode, setMode] = useState<BuilderMode>('header');
   const [showSequence, setShowSequence] = useState(false);
+  const headerRef = useRef<HeaderEditorHandle>(null);
+  const [headerDirty, setHeaderDirty] = useState(false);
+  const [headerCanSave, setHeaderCanSave] = useState(false);
+  // Per-operation dirty/save registry — survives operation switches.
+  const opsRegistryRef = useRef(new Map<string, { dirty: boolean; save: () => void }>());
+  const [opsDirty, setOpsDirty] = useState(false);
+  // Saves every dirty operation in one call.
+  const opsSaveRef = useRef<() => void>(() => {});
+  const anyDirty = headerDirty || opsDirty;
+  // Ops dirty as a ref so event handlers (registered once) always see the current value.
+  const opsDirtyRef = useRef(false);
+  opsDirtyRef.current = opsDirty;
+
+  // Persist unsaved edits across component remounts (e.g. router.refresh() RSC reconciliation).
+  const stepEditsRef = useRef(new Map<string, { title: string; body: string | null; order: string }>());
+  const opEditsRef = useRef(new Map<string, { name: string; seq: string; instructions: string }>());
+
+  // Guard state: null = no dialog, otherwise stores the action to run after confirmation.
+  const [guardIntent, setGuardIntent] = useState<{ proceed: () => void } | null>(null);
+  // When set, navigate here once the in-flight save transition finishes.
+  const [pendingNavigate, setPendingNavigate] = useState<{ fn: () => void } | null>(null);
+
   const sortedOps = [...master.operations].sort((a, b) => a.sequence - b.sequence);
   const [selectedOpId, setSelectedOpId] = useState<string | null>(sortedOps[0]?.id ?? null);
   const [newOpName, setNewOpName] = useState('');
 
   const selectedOp: Operation | null =
     master.operations.find((o) => o.id === selectedOpId) ?? sortedOps[0] ?? null;
+
+  // ── Navigation guard ────────────────────────────────────────────────────────
+
+  // Synchronous dirty check — reads directly from the live component handles.
+  function isAnyDirtyNow() {
+    return (headerRef.current?.isDirty() ?? false) || opsDirtyRef.current;
+  }
+
+  function handleOpDirtyChange(opId: string, dirty: boolean, save: () => void) {
+    opsRegistryRef.current.set(opId, { dirty, save });
+    const any = [...opsRegistryRef.current.values()].some((e) => e.dirty);
+    setOpsDirty(any);
+    opsSaveRef.current = () => {
+      opsRegistryRef.current.forEach((e) => { if (e.dirty) e.save(); });
+    };
+  }
+
+  // Intercept all anchor-link clicks (covers <Link>, TopNav, ModuleMenu) before
+  // Next.js's own click handler has a chance to start navigating.
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!isAnyDirtyNow()) return;
+      const anchor = (e.target as Element).closest('a[href]');
+      if (!anchor) return;
+      const resolved = (anchor as HTMLAnchorElement).href; // absolute URL
+      try {
+        const dest = new URL(resolved);
+        if (dest.origin !== window.location.origin) return; // external — let beforeunload handle it
+        if (dest.pathname === window.location.pathname) return; // same page (hash jump etc.)
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const path = dest.pathname + dest.search + dest.hash;
+        setGuardIntent({ proceed: () => router.push(path) });
+      } catch { /* malformed href — ignore */ }
+    }
+    document.addEventListener('click', handle, { capture: true });
+    return () => document.removeEventListener('click', handle, { capture: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Browser back button — capture phase fires before Next.js's popstate listener.
+  useEffect(() => {
+    const savedHref = window.location.href;
+    function handle(e: PopStateEvent) {
+      if (!isAnyDirtyNow()) return;
+      const backDest = window.location.href; // already changed to the back destination
+      e.stopImmediatePropagation();
+      window.history.pushState(null, '', savedHref); // restore URL
+      setGuardIntent({ proceed: () => router.push(backDest) });
+    }
+    window.addEventListener('popstate', handle, { capture: true });
+    return () => window.removeEventListener('popstate', handle, { capture: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tab close / hard refresh → native browser "leave page?" dialog.
+  useEffect(() => {
+    function handle(e: BeforeUnloadEvent) {
+      if (isAnyDirtyNow()) { e.preventDefault(); e.returnValue = ''; }
+    }
+    window.addEventListener('beforeunload', handle);
+    return () => window.removeEventListener('beforeunload', handle);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After "Save" in the guard dialog — wait for the save transition, then navigate.
+  useEffect(() => {
+    if (!pendingNavigate || pending) return;
+    if (globalError) { setPendingNavigate(null); return; } // save failed — stay
+    const { fn } = pendingNavigate;
+    setPendingNavigate(null);
+    fn();
+  }, [pending, pendingNavigate, globalError]);
+
+  function guardSave() {
+    const { proceed } = guardIntent!;
+    setGuardIntent(null);
+    headerRef.current?.save();
+    opsSaveRef.current();
+    setPendingNavigate({ fn: proceed });
+  }
+
+  function guardDiscard() {
+    const { proceed } = guardIntent!;
+    setGuardIntent(null);
+    proceed();
+  }
 
   function run(fn: () => Promise<unknown>, after?: (result: unknown) => void) {
     setGlobalError(null);
@@ -54,78 +164,191 @@ export function MasterBuilder({ master }: { master: EngineeringMaster }) {
 
   return (
     <>
-    <div className="flex" style={{ height: 'calc(100vh - 3.5rem)' }}>
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 3.5rem)' }}>
 
-      {/* ── Operations sidebar ── */}
-      <aside className="w-64 flex flex-col border-r hairline bg-ink-900/60 shrink-0">
-        <div className="px-4 pt-5 pb-4 border-b hairline">
-          <Link href="/manufacturing/planning"
-            className="text-[10px] uppercase tracking-widest text-ink-400 hover:text-accent transition-colors">
-            ← Planning
-          </Link>
-          <div className="mt-2 font-mono text-base text-ink-100 leading-tight">{master.partNumber}</div>
-          <div className="text-xs text-ink-400 truncate">
-            {master.partName ?? <span className="italic text-ink-500">unlinked part</span>}
-          </div>
-          <div className="mt-2 inline-flex items-center px-2 h-5 text-[10px] uppercase tracking-widest border rounded-sm bg-accent/10 text-accent border-accent/30">
-            {master.status}
-          </div>
+      {/* ── Top bar: identity + mode toggle ── */}
+      <header className="flex items-center gap-4 px-5 h-12 border-b hairline bg-ink-900/60 shrink-0">
+        <button
+          onClick={() => {
+            if (isAnyDirtyNow()) setGuardIntent({ proceed: () => router.push('/manufacturing/planning') });
+            else router.push('/manufacturing/planning');
+          }}
+          className="text-[10px] uppercase tracking-widest text-ink-400 hover:text-accent transition-colors shrink-0">
+          ← Planning
+        </button>
+        <div className="font-mono text-sm text-ink-100 leading-tight shrink-0">{master.partNumber}</div>
+        <div className="text-xs text-ink-400 truncate hidden sm:block">
+          {master.partName ?? <span className="italic text-ink-500">unlinked part</span>}
+        </div>
+        <div className="inline-flex items-center px-2 h-5 text-[10px] uppercase tracking-widest border rounded-sm bg-accent/10 text-accent border-accent/30 shrink-0">
+          {master.status}
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Mode toggle + save */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => setShowSequence(true)}
-            className="mt-3 w-full h-8 flex items-center justify-center gap-2 text-xs uppercase tracking-wider border border-accent/30 text-accent rounded-sm hover:bg-accent/15 transition-colors">
-            <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor" aria-hidden="true">
-              <rect x="0" y="1.5" width="4" height="3" rx="0.5" />
-              <rect x="10" y="4.5" width="4" height="3" rx="0.5" />
-              <rect x="0" y="7.5" width="4" height="3" rx="0.5" />
-              <path d="M4 3h3.5v3H4zM7.5 6H10M4 9h3.5V6" stroke="currentColor" strokeWidth="1" fill="none" />
-            </svg>
-            Sequence
+            onClick={() => { headerRef.current?.save(); opsSaveRef.current(); }}
+            disabled={pending || (!headerDirty && !opsDirty) || (headerDirty && !headerCanSave)}
+            className="h-8 px-4 text-xs uppercase tracking-wider text-accent border border-accent/30 rounded-sm hover:bg-accent/15 disabled:opacity-40 transition-colors">
+            Save
           </button>
+          <div className="inline-flex rounded-sm border border-ink-700 overflow-hidden">
+            <ModeButton active={mode === 'header'} onClick={() => setMode('header')}>Header</ModeButton>
+            <ModeButton active={mode === 'operations'} onClick={() => setMode('operations')}>Operations</ModeButton>
+          </div>
         </div>
+      </header>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {sortedOps.length === 0 ? (
-            <p className="text-center text-xs text-ink-500 py-6">No operations yet.</p>
-          ) : sortedOps.map((op) => (
-            <OpTile key={op.id} op={op} selected={op.id === selectedOp?.id}
-              onClick={() => setSelectedOpId(op.id)} />
+      {globalError && (
+        <div className="px-5 py-2 text-xs text-signal-alert font-mono bg-ink-900 border-b hairline shrink-0">
+          {globalError}
+        </div>
+      )}
+
+      {/* Both panels stay mounted so unsaved edits survive mode switches. CSS hides the inactive one. */}
+      <div className={`flex-1 flex flex-col overflow-hidden ${mode !== 'header' ? 'hidden' : ''}`}>
+        <HeaderEditor
+          ref={headerRef}
+          master={master}
+          pending={pending}
+          run={run}
+          onDirtyChange={(dirty, canSave) => { setHeaderDirty(dirty); setHeaderCanSave(canSave); }}
+        />
+      </div>
+
+      <div className={`flex flex-1 overflow-hidden ${mode !== 'operations' ? 'hidden' : ''}`}>
+        {/* ── Operations sidebar ── */}
+        <aside className="w-64 flex flex-col border-r hairline bg-ink-900/60 shrink-0">
+          <div className="px-4 py-3 border-b hairline">
+            <button
+              onClick={() => setShowSequence(true)}
+              className="w-full h-8 flex items-center justify-center gap-2 text-xs uppercase tracking-wider border border-accent/30 text-accent rounded-sm hover:bg-accent/15 transition-colors">
+              <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor" aria-hidden="true">
+                <rect x="0" y="1.5" width="4" height="3" rx="0.5" />
+                <rect x="10" y="4.5" width="4" height="3" rx="0.5" />
+                <rect x="0" y="7.5" width="4" height="3" rx="0.5" />
+                <path d="M4 3h3.5v3H4zM7.5 6H10M4 9h3.5V6" stroke="currentColor" strokeWidth="1" fill="none" />
+              </svg>
+              Sequence
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {sortedOps.length === 0 ? (
+              <p className="text-center text-xs text-ink-500 py-6">No operations yet.</p>
+            ) : sortedOps.map((op) => (
+              <OpTile key={op.id} op={op} selected={op.id === selectedOp?.id}
+                onClick={() => setSelectedOpId(op.id)} />
+            ))}
+          </div>
+
+          <div className="border-t hairline p-3 space-y-2">
+            <input value={newOpName} onChange={(e) => setNewOpName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addOperation()}
+              placeholder="Operation name…"
+              className="w-full h-8 bg-ink-950 border hairline rounded-sm px-2 text-sm text-ink-100 focus:outline-none focus:border-accent" />
+            <button onClick={addOperation} disabled={pending || !newOpName.trim()}
+              className="w-full h-8 text-xs uppercase tracking-wider border border-accent/30 text-accent rounded-sm hover:bg-accent/15 disabled:opacity-40">
+              + Add Operation
+            </button>
+          </div>
+        </aside>
+
+        {/* ── Steps panels — all mounted, inactive hidden so edits survive op switches ── */}
+        <main className="flex-1 overflow-hidden relative">
+          {sortedOps.length === 0 && (
+            <div className="flex items-center justify-center h-full text-sm text-ink-400">
+              Add an operation to begin.
+            </div>
+          )}
+          {sortedOps.map((op) => (
+            <div
+              key={op.id}
+              className={`absolute inset-0 flex flex-col overflow-hidden ${op.id !== selectedOp?.id ? 'hidden' : ''}`}
+            >
+              <StepsPanel
+                masterId={master.id} operation={op}
+                pending={pending} run={run}
+                stepEditsRef={stepEditsRef}
+                opEditsRef={opEditsRef}
+                onRemoved={() => setSelectedOpId(sortedOps.find((o) => o.id !== op.id)?.id ?? null)}
+                onDirtyChange={(dirty, save) => handleOpDirtyChange(op.id, dirty, save)}
+              />
+            </div>
           ))}
-        </div>
-
-        <div className="border-t hairline p-3 space-y-2">
-          <input value={newOpName} onChange={(e) => setNewOpName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addOperation()}
-            placeholder="Operation name…"
-            className="w-full h-8 bg-ink-950 border hairline rounded-sm px-2 text-sm text-ink-100 focus:outline-none focus:border-accent" />
-          <button onClick={addOperation} disabled={pending || !newOpName.trim()}
-            className="w-full h-8 text-xs uppercase tracking-wider border border-accent/30 text-accent rounded-sm hover:bg-accent/15 disabled:opacity-40">
-            + Add Operation
-          </button>
-        </div>
-      </aside>
-
-      {/* ── Steps panel ── */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {globalError && (
-          <div className="px-5 py-2 text-xs text-signal-alert font-mono bg-ink-900 border-b hairline shrink-0">
-            {globalError}
-          </div>
-        )}
-        {selectedOp === null ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-ink-400">
-            Add an operation to begin.
-          </div>
-        ) : (
-          <StepsPanel
-            key={selectedOp.id} masterId={master.id} operation={selectedOp}
-            pending={pending} run={run}
-            onRemoved={() => setSelectedOpId(sortedOps.find((o) => o.id !== selectedOp.id)?.id ?? null)}
-          />
-        )}
-      </main>
+        </main>
+      </div>
     </div>
     {showSequence && <SequenceEditor master={master} onClose={() => setShowSequence(false)} />}
+
+    {guardIntent && (
+      <UnsavedChangesDialog
+        onSave={guardSave}
+        onDiscard={guardDiscard}
+        onCancel={() => setGuardIntent(null)}
+        saving={pending && !!pendingNavigate}
+      />
+    )}
     </>
+  );
+}
+
+// ── Unsaved changes dialog ────────────────────────────────────────────────────
+
+function UnsavedChangesDialog({ onSave, onDiscard, onCancel, saving }: {
+  onSave: () => void;
+  onDiscard: () => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      {/* Dialog */}
+      <div className="relative bg-ink-900 border hairline rounded-sm shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-sm font-semibold text-ink-100">Unsaved changes</h2>
+        <p className="mt-2 text-sm text-ink-400 leading-relaxed">
+          You have unsaved changes that will be lost if you navigate away.
+        </p>
+        <div className="mt-6 flex items-center gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="h-8 px-3 text-xs uppercase tracking-wider border hairline text-ink-400 rounded-sm hover:border-ink-400 hover:text-ink-200 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={onDiscard}
+            className="h-8 px-3 text-xs uppercase tracking-wider border border-ink-600 text-ink-300 rounded-sm hover:border-ink-400 hover:text-ink-100 transition-colors">
+            Don&apos;t save
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="h-8 px-4 text-xs uppercase tracking-wider bg-accent/15 border border-accent/30 text-accent rounded-sm hover:bg-accent/25 disabled:opacity-50 transition-colors">
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Mode toggle button ─────────────────────────────────────────────────────────
+
+function ModeButton({ active, onClick, children }: {
+  active: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-8 px-4 text-xs uppercase tracking-wider transition-colors ${
+        active ? 'bg-accent/15 text-accent' : 'text-ink-400 hover:text-ink-100 hover:bg-ink-800/60'
+      }`}>
+      {children}
+    </button>
   );
 }
 
@@ -150,19 +373,28 @@ function OpTile({ op, selected, onClick }: { op: Operation; selected: boolean; o
 
 // ── Steps panel ──────────────────────────────────────────────────────────────
 
-function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
+function StepsPanel({ masterId, operation, pending, run, onRemoved, onDirtyChange, stepEditsRef, opEditsRef }: {
   masterId: string; operation: Operation; pending: boolean;
   run: (fn: () => Promise<unknown>, after?: (result: unknown) => void) => void;
   onRemoved: () => void;
+  onDirtyChange: (dirty: boolean, save: () => void) => void;
+  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string }>>;
+  opEditsRef: React.MutableRefObject<Map<string, { name: string; seq: string; instructions: string }>>;
 }) {
-  const [opName, setOpName] = useState(operation.name);
-  const [opSeq, setOpSeq] = useState(String(operation.sequence));
-  const [opInstructions, setOpInstructions] = useState(operation.instructions ?? '');
+  const cachedOp = opEditsRef.current.get(operation.id);
+  const [opName, setOpName] = useState(cachedOp?.name ?? operation.name);
+  const [opSeq, setOpSeq] = useState(cachedOp?.seq ?? String(operation.sequence));
+  const [opInstructions, setOpInstructions] = useState(cachedOp?.instructions ?? (operation.instructions ?? ''));
   const [newStepTitle, setNewStepTitle] = useState('');
+  const [anyStepDirty, setAnyStepDirty] = useState(false);
+  const stepRegistry = useRef(new Map<string, { dirty: boolean; save: () => void }>());
+
   const parsedSeq = parseInt(opSeq, 10);
-  const headerDirty = (opName.trim() !== '' && opName.trim() !== operation.name) ||
+  const opHeaderDirty = (opName.trim() !== '' && opName.trim() !== operation.name) ||
     (!isNaN(parsedSeq) && parsedSeq !== operation.sequence);
   const instructionsDirty = opInstructions !== (operation.instructions ?? '');
+  const opDirty = opHeaderDirty || instructionsDirty;
+  const overallDirty = opDirty || anyStepDirty;
   const sortedSteps = [...operation.steps].sort((a, b) => a.order - b.order);
 
   function saveOp() {
@@ -171,6 +403,30 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
       name: opName.trim(),
       instructions: opInstructions,
     }));
+  }
+
+  // Always-fresh save-all; stable wrapper passed upward so MasterBuilder ref stays valid.
+  const saveAllRef = useRef<() => void>(() => {});
+  saveAllRef.current = () => {
+    if (opDirty) saveOp();
+    stepRegistry.current.forEach(({ dirty, save }) => { if (dirty) save(); });
+  };
+  const stableSaveAll = useCallback(() => saveAllRef.current(), []);
+
+  useEffect(() => {
+    onDirtyChange(overallDirty, stableSaveAll);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overallDirty]);
+
+  // Keep the op edit cache in sync so remounts restore unsaved data.
+  useEffect(() => {
+    opEditsRef.current.set(operation.id, { name: opName, seq: opSeq, instructions: opInstructions });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opName, opSeq, opInstructions]);
+
+  function handleStepDirtyChange(stepId: string, dirty: boolean, save: () => void) {
+    stepRegistry.current.set(stepId, { dirty, save });
+    setAnyStepDirty([...stepRegistry.current.values()].some((s) => s.dirty));
   }
 
   return (
@@ -185,14 +441,6 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
           className="w-16 h-9 bg-ink-950 border hairline rounded-sm px-2 text-sm font-mono text-ink-100 focus:outline-none focus:border-accent text-center shrink-0" />
         <input value={opName} onChange={(e) => setOpName(e.target.value)}
           className="flex-1 h-9 bg-ink-950 border hairline rounded-sm px-3 text-base text-ink-100 focus:outline-none focus:border-accent" />
-        {headerDirty && (
-          <button
-            onClick={saveOp}
-            disabled={pending}
-            className="h-9 px-3 text-xs uppercase tracking-wider text-accent border border-accent/30 rounded-sm hover:bg-accent/15 disabled:opacity-50 shrink-0">
-            Save
-          </button>
-        )}
         <button
           onClick={() => { if (window.confirm(`Remove "${operation.name}" and all its steps?`)) run(() => mastersApi.removeOperation(masterId, operation.id), onRemoved); }}
           disabled={pending}
@@ -208,9 +456,7 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
         value={opInstructions}
         onChange={setOpInstructions}
         attachments={operation.attachments ?? []}
-        dirty={instructionsDirty}
         pending={pending}
-        onSave={saveOp}
         onAttachmentChange={() => run(() => Promise.resolve())}
       />
 
@@ -223,7 +469,12 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
         ) : (
           <div className="p-5 space-y-4">
             {sortedSteps.map((step) => (
-              <StepCard key={step.id} masterId={masterId} opId={operation.id} step={step} pending={pending} run={run} />
+              <StepCard
+                key={step.id} masterId={masterId} opId={operation.id} step={step}
+                pending={pending} run={run}
+                stepEditsRef={stepEditsRef}
+                onDirtyChange={handleStepDirtyChange}
+              />
             ))}
           </div>
         )}
@@ -246,62 +497,13 @@ function StepsPanel({ masterId, operation, pending, run, onRemoved }: {
   );
 }
 
-// ── HTML ↔ plain-text helpers ─────────────────────────────────────────────────
-
-function textToHtml(text: string): string {
-  if (!text.trim()) return '';
-  const lines = text.split('\n');
-  const out: string[] = [];
-  let inUl = false;
-  let inOl = false;
-  for (const line of lines) {
-    const bullet = line.match(/^[-*]\s+(.*)$/);
-    const numbered = line.match(/^\d+\.\s+(.*)$/);
-    if (bullet) {
-      if (inOl) { out.push('</ol>'); inOl = false; }
-      if (!inUl) { out.push('<ul>'); inUl = true; }
-      out.push(`  <li>${bullet[1]}</li>`);
-    } else if (numbered) {
-      if (inUl) { out.push('</ul>'); inUl = false; }
-      if (!inOl) { out.push('<ol>'); inOl = true; }
-      out.push(`  <li>${numbered[1]}</li>`);
-    } else {
-      if (inUl) { out.push('</ul>'); inUl = false; }
-      if (inOl) { out.push('</ol>'); inOl = false; }
-      out.push(line.trim() ? `<p>${line}</p>` : '');
-    }
-  }
-  if (inUl) out.push('</ul>');
-  if (inOl) out.push('</ol>');
-  return out.join('\n');
-}
-
-function htmlToText(html: string): string {
-  let t = html;
-  t = t.replace(/<ol>([\s\S]*?)<\/ol>/gi, (_, c) => {
-    let i = 0;
-    return c.replace(/<li>([\s\S]*?)<\/li>/gi, (_: string, item: string) => `${++i}. ${item.trim()}\n`);
-  });
-  t = t.replace(/<ul>([\s\S]*?)<\/ul>/gi, (_, c) =>
-    c.replace(/<li>([\s\S]*?)<\/li>/gi, (_: string, item: string) => `- ${item.trim()}\n`),
-  );
-  return t
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<p[^>]*>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 // ── Op instructions editor ────────────────────────────────────────────────────
 
-function OpInstructionsEditor({ masterId, opId, value, onChange, attachments, dirty, pending, onSave, onAttachmentChange }: {
+function OpInstructionsEditor({ masterId, opId, value, onChange, attachments, pending, onAttachmentChange }: {
   masterId: string; opId: string;
   value: string; onChange: (v: string) => void;
   attachments: OperationAttachment[];
-  dirty: boolean; pending: boolean;
-  onSave: () => void;
+  pending: boolean;
   onAttachmentChange: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -360,14 +562,6 @@ function OpInstructionsEditor({ masterId, opId, value, onChange, attachments, di
           </svg>
         </button>
         <span className="text-[10px] uppercase tracking-widest text-ink-400 flex-1">Op Instructions</span>
-        {dirty && !collapsed && (
-          <button
-            onClick={onSave}
-            disabled={pending}
-            className="h-7 px-3 text-xs uppercase tracking-wider text-accent border border-accent/30 rounded-sm hover:bg-accent/15 disabled:opacity-50">
-            Save
-          </button>
-        )}
       </div>
 
       {/* Editor body */}
@@ -582,20 +776,42 @@ function OpAttachmentsPanel({ masterId, opId, attachments, pending, onUploaded, 
 
 // ── Step card ─────────────────────────────────────────────────────────────────
 
-function StepCard({ masterId, opId, step, pending, run }: {
+function StepCard({ masterId, opId, step, pending, run, onDirtyChange, stepEditsRef }: {
   masterId: string; opId: string; step: Step; pending: boolean;
   run: (fn: () => Promise<unknown>, after?: (result: unknown) => void) => void;
+  onDirtyChange: (stepId: string, dirty: boolean, save: () => void) => void;
+  stepEditsRef: React.MutableRefObject<Map<string, { title: string; body: string | null; order: string }>>;
 }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [title, setTitle] = useState(step.title);
-  const [body, setBody] = useState(step.body);
-  const [stepOrder, setStepOrder] = useState(String(step.order));
+  const cachedStep = stepEditsRef.current.get(step.id);
+  const [title, setTitle] = useState(cachedStep?.title ?? step.title);
+  const [body, setBody] = useState(cachedStep?.body ?? step.body);
+  const [stepOrder, setStepOrder] = useState(cachedStep?.order ?? String(step.order));
   const [htmlMode, setHtmlMode] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const parsedOrder = parseInt(stepOrder, 10);
   const dirty = (title.trim() !== step.title && title.trim() !== '') || body !== step.body ||
     (!isNaN(parsedOrder) && parsedOrder !== step.order);
+
+  const saveRef = useRef<() => void>(() => {});
+  saveRef.current = () => run(() => mastersApi.updateStep(masterId, opId, step.id, {
+    order: isNaN(parsedOrder) ? step.order : parsedOrder,
+    title: title.trim(),
+    body,
+  }));
+  const stableSave = useCallback(() => saveRef.current(), []);
+
+  useEffect(() => {
+    onDirtyChange(step.id, dirty, stableSave);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty]);
+
+  // Keep the step edit cache in sync so remounts restore unsaved data.
+  useEffect(() => {
+    stepEditsRef.current.set(step.id, { title, body, order: stepOrder });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, body, stepOrder]);
 
   function toggleHtmlMode() {
     setBody((prev) => (htmlMode ? htmlToText(prev) : textToHtml(prev)));
@@ -657,14 +873,6 @@ function StepCard({ masterId, opId, step, pending, run }: {
         <input value={title} onChange={(e) => setTitle(e.target.value)}
           placeholder="Step title…"
           className="flex-1 h-8 bg-ink-950 border hairline rounded-sm px-2 text-sm text-ink-100 focus:outline-none focus:border-accent" />
-        {dirty && (
-          <button
-            onClick={() => run(() => mastersApi.updateStep(masterId, opId, step.id, { order: isNaN(parsedOrder) ? step.order : parsedOrder, title: title.trim(), body }))}
-            disabled={pending}
-            className="h-8 px-3 text-xs uppercase tracking-wider text-accent border border-accent/30 rounded-sm hover:bg-accent/15 disabled:opacity-50 shrink-0">
-            Save
-          </button>
-        )}
         <button
           onClick={() => run(() => mastersApi.removeStep(masterId, opId, step.id))}
           disabled={pending}
